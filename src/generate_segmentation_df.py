@@ -143,7 +143,7 @@ def add_autophagy_col(df: DataFrame,
         # updating current row index
         current_row_index += 1
 
-
+def get_cytoplasms_info()
 def generate_segmentation_df(input_folder: str,
                              images_extension: str,
                              output_path: str,

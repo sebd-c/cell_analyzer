@@ -18,6 +18,8 @@ from cv2 import contourArea
 from cv2 import RETR_EXTERNAL
 from cv2 import boundingRect
 from cv2 import CHAIN_APPROX_NONE
+from cv2 import moments
+from cv2 import minAreaRect
 
 ######################################################################
 # defining auxiliary functions
@@ -212,24 +214,57 @@ def get_contour_centroid(contour: ndarray) -> tuple:
     (cx, cy)
     """
     # getting contour coords
-    contour_coords = boundingRect(contour)
+    # contour_coords = boundingRect(contour)
+    #
+    # # extracting features from coords tuple
+    # corner_x, corner_y, width, height = contour_coords
+    #
+    # # getting current center points
+    # cx = corner_x + (width / 2)
+    # cy = corner_y + (height / 2)
+    #
+    # # converting cx/cy to ints
+    # cx = int(cx)
+    # cy = int(cy)
+    #
+    # # assembling coords tuple
+    # coords_tuple = (cx, cy)
+    #
+    # # returning coords tuple
+    # return coords_tuple
+    m = moments(contour)
+    cx = int(m['m10'] / m['m00'])
+    cy = int(m['m01'] / m['m00'])
 
-    # extracting features from coords tuple
-    corner_x, corner_y, width, height = contour_coords
+    return cx, cy
 
-    # getting current center points
-    cx = corner_x + (width / 2)
-    cy = corner_y + (height / 2)
 
-    # converting cx/cy to ints
-    cx = int(cx)
-    cy = int(cy)
-
-    # assembling coords tuple
-    coords_tuple = (cx, cy)
-
-    # returning coords tuple
-    return coords_tuple
+def get_contour_min_rect_area(contour: ndarray) -> float:
+    """
+    Given a contour, returns
+    the area of the minimum
+    possible rectangle
+    """
+    # getting contour coords
+    # contour_coords = boundingRect(contour)
+    #
+    # # extracting features from coords tuple
+    # corner_x, corner_y, width, height = contour_coords
+    #
+    # # getting current center points
+    # cx = corner_x + (width / 2)
+    # cy = corner_y + (height / 2)
+    #
+    # # converting cx/cy to ints
+    # cx = int(cx)
+    # cy = int(cy)
+    #
+    # # assembling coords tuple
+    # coords_tuple = (cx, cy)
+    #
+    # # returning coords tuple
+    # return coords_tuple
+    pass
 
 
 def get_contours_df(image_name: str,
@@ -263,9 +298,34 @@ def get_contours_df(image_name: str,
     # getting current contours areas
     contours_areas = [contourArea(contour) for contour in contours]
 
+    # getting current contours area boxes
+    # area / area box
+    contours_area_boxes = [contourArea(contour) for contour in contours]
+
+    # getting current contours' radius ratio
+    # max radius / min radius
+    contours_areas = [contourArea(contour) for contour in contours]
+
+    # getting current contours' aspect
+    # major ellipse axis  / min ellipse axis
+    for i in range(len(contours)):
+        center, axis, rotation = cv.fitEllipse(contours[i])
+        w = axis[0]      # minor axis
+        h = axis[1]         # major axis
+        e = math.sqrt((h**2)- (w**2))/h**2       # eccentricity
+        if max_radius is None or h < max_radius:
+            if w > min_radius and e < eccentricity:
+                new_cnt_list.append(contours[i])
+    contours_areas = [contourArea(contour) for contour in contours]
+
+    # TODO:ver com o edu oq é roundness
+    # getting current contours' roundness
+    countours_roundnesses = [contourArea(contour) for contour in contours]
+
     # assembling contours dict
     contours_dict = {'image_name': image_names,
                      'contour_index': contours_indices,
+                     'contour': contours,
                      'contour': contours,
                      'coords': contours_coords,
                      'area': contours_areas}
