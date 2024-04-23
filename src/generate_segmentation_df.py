@@ -51,8 +51,8 @@ def get_args_dict() -> dict:
                         help='defines extension (.tif, .png, .jpg) of images in input folders')
 
     # output path param
-    parser.add_argument('-o', '--output-path',
-                        dest='output_path',
+    parser.add_argument('-o', '--output_folder',
+                        dest='output_folder',
                         required=True,
                         help='defines path to output file (.csv)')
 
@@ -180,7 +180,7 @@ def main():
     images_extension = args_dict['images_extension']
 
     # getting output path
-    output_path = args_dict['output_path']
+    output_folder = args_dict['output_foler']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
