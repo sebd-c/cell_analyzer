@@ -11,20 +11,13 @@
 from os import listdir
 from sys import stdout
 from numpy import ndarray
-from pandas import DataFrame
-from cv2 import imread
-from cv2 import findContours
-from cv2 import contourArea
-from cv2 import RETR_EXTERNAL
-from cv2 import boundingRect
-from cv2 import CHAIN_APPROX_NONE
 from cv2 import moments
 from cv2 import minAreaRect
 from math import sqrt
 from cv2 import fitEllipse
 from cv2 import arcLength
 from math import pi
-from pandas import concat
+
 ######################################################################
 # defining auxiliary functions
 
@@ -120,7 +113,6 @@ def print_execution_parameters(params_dict: dict) -> None:
 
     # iterating over parameters in params_list
     for dict_element in params_dict.items():
-
         # getting params key/value
         param_key, param_value = dict_element
 
@@ -172,32 +164,6 @@ def print_progress_message(base_string: str,
                    total=total)
 
 
-def get_specific_files_in_folder(path_to_folder: str,
-                                 extension: str
-                                 ) -> list:
-    """
-    Given a path to a folder, returns a list containing
-    all files in folder that match given extension.
-    :param path_to_folder: String. Represents a path to a folder.
-    :param extension: String. Represents a specific file extension.
-    :return: List[str]. Represents all files that match extension in given folder.
-    """
-    # getting all files in folder
-    all_files_in_folder = listdir(path_to_folder)
-
-    # getting specific files
-    files_in_dir = [file                          # getting file
-                    for file                      # iterating over files
-                    in all_files_in_folder        # in input folder
-                    if file.endswith(extension)]  # only if file matches given extension
-
-    # sorting list
-    files_in_dir = sorted(files_in_dir)
-
-    # returning list
-    return files_in_dir
-
-
 def enter_to_continue():
     """
     Waits for user input ("Enter")
@@ -227,39 +193,25 @@ def get_contour_centroid(contour: ndarray) -> tuple:
     return cx, cy
 
 
-def get_contour_min_rect_area(contour: ndarray) -> float:
-    """
-    Given a contour, returns
-    the area of the minimum
-    possible rectangle
-    """
-    # get minimum area rectangle
-    (cx, cy, width, height, theta) = minAreaRect(contour)
-
-    # acquire its area
-    contour_min_rect_area = (width * height)/2
-
-    return contour_min_rect_area
-
-
-def get_area_box(contour: ndarray) -> float:
+def get_area_box(contour: ndarray, contour_area: float) -> float:
     """
     given a contour,
     returns its calculated area box
     """
 
-    # yet again get the area of said contour
-    contour_area = contourArea(contour)
-    # and its minimum rectangle
-    contour_min_rect_area = get_contour_min_rect_area(contour)
+    # get minimum area rectangle
+    ((cx, cy), (width, height), theta) = minAreaRect(contour)
+
+    # acquire its area
+    contour_min_rect_area = width * height
 
     # calculates area box by definition given in IPP6
-    contour_area_box = contour_area/contour_min_rect_area
+    contour_area_box = contour_area / contour_min_rect_area
 
     return contour_area_box
 
 
-def get_distance(point_o: tuple, point_d: tuple)-> float:
+def get_distance(point_o: tuple, point_d: tuple) -> float:
     """
     given two points in space,
     x1, y1 and x2, y2,
@@ -269,12 +221,12 @@ def get_distance(point_o: tuple, point_d: tuple)-> float:
     x2, y2 = point_d
 
     # calculates distance
-    distance = sqrt((x2 - x1)**2 + (y2 - y1)**2)
+    distance = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
     return distance
 
 
-def get_contour_rratio(contour: ndarray) -> float:
+def get_contour_rratio(contour: ndarray, origin: tuple) -> float:
     """
     given a countour,
     gets its max and min
@@ -283,8 +235,6 @@ def get_contour_rratio(contour: ndarray) -> float:
     and calculate the ratio between them
     i.e. the radius ratio
     """
-    # getting contour centroid
-    origin = get_contour_centroid(contour)
 
     # holder variable to max_radius
     max_radius = float('-inf')
@@ -295,9 +245,21 @@ def get_contour_rratio(contour: ndarray) -> float:
     # loop to run in coordinates
     for destiny in contour:
 
+        # the actual type of "destiny" in contour is actually an array
+        # this is why we need to first convert to list.
+
+        # converting array to list
+        destiny_list = destiny.tolist()
+
+        # unpacking values
+        destiny_x, destiny_y = destiny_list[0]
+
+        # assembling destiny coords tuple
+        destiny_coords = (destiny_x, destiny_y)
+
         # calculates distance
         distance = get_distance(point_o=origin,
-                                point_d=destiny)
+                                point_d=destiny_coords)
 
         # compares curr dist to the radiuses
         # and updates than if necessary
@@ -307,7 +269,7 @@ def get_contour_rratio(contour: ndarray) -> float:
             max_radius = distance
 
         # min radius clause
-        if distance <= min_radius:
+        if distance <= min_radius and distance != 0:
             min_radius = distance
 
     # calculates the ratio between the radiuses
@@ -316,143 +278,53 @@ def get_contour_rratio(contour: ndarray) -> float:
     return radius_ratio
 
 
-def get_contour_aspect(contour: ndarray) -> float:
+def get_contour_ellipse_feats(contour: ndarray) -> tuple:
     """
     given a contour, returns its "aspect"
     calculated bt the ratio between
-    an ellipses major and minor axis
+    an ellipses major and minor axis,
+    and its eccentricity, given by mathematical formula
     """
     # get the corresponding ellipse
     center, axis, theta = fitEllipse(contour)
 
-    #separate the axis
-    if axis[0] > axis[1]:
-        # major axis
-        major_axis = axis[0]
+    # unpacking width/height
+    width, height = axis
 
-        # minor axis
-        minor_axis = axis[1]
-    else:
-        # major axis
-        major_axis = axis[1]
-
-        # minor axis
-        minor_axis = axis[0]
+    # getting major/minor axes
+    minor_axis = width if width < height else height
+    major_axis = width if width > height else height
 
     # calculates aspect
-    aspect = major_axis/minor_axis
+    # TODO: check here for errors of 0 division
+    # print(center)
+    # print(axis)
+    aspect = major_axis / minor_axis
 
-    return aspect
+    # calculates the eccentricity
+    eccentricity = sqrt((major_axis ** 2) - (minor_axis ** 2)) / major_axis ** 2
+
+    return aspect, eccentricity
 
 
-def get_contour_roundness(contour: ndarray) -> float:
+def get_contour_roundness(contour: ndarray, contour_area: float) -> float:
     """
     given a contour, returns its "roundness"
     calculated as shown in IPP
     """
 
-    #getting contour area
-    contour_area = contourArea(contour)
-
     # getting contour perimeter
     contour_perimeter = arcLength(contour, True)
 
     # calculating rondness
-    roundness = (contour_perimeter**2)/ (4 * contour_area * pi)
+    roundness = (contour_perimeter ** 2) / (4 * contour_area * pi)
 
     return roundness
 
 
-def get_eccentricity()
-    # calculates the eccentricity
-    eccentricity = sqrt((height ** 2) - (width ** 2)) / height ** 2
-    if max_radius is None or h < max_radius:
-        if w > min_radius and e < eccentricity:
-            new_cnt_list.append(contours[i])
-    pass
-
-
-def make_image_contours_df(image_name: str,
-                           image_path: str
-                          ) -> DataFrame:
-    """
-    Given a path to a binary image,
-    finds contours and returns data
-    frame containing contours coords.
-    """
-
-    # reading image
-    image = imread(image_path,
-                   -1)
-
-    # finding contours in image
-    contours, _ = findContours(image, RETR_EXTERNAL, CHAIN_APPROX_NONE)
-
-    # gets enumerate to have indexes
-    contours_enumerate = enumerate(contours, 1)
-
-    # make empty lists to put the contours' information in
-    image_names = []
-    contours_indices = []
-    contours_coords = []
-    contours_areas = []
-    contours_area_boxes = []
-    contours_rratios = []
-    contours_aspects = []
-    countours_roundnesses = []
-
-    # loop inside an image
-    # to work with that images' contours
-    for i, contour in contours_enumerate:
-
-        # getting current contours indices
-        contours_indices.append(i)
-
-        # getting current image col lists
-        image_names.append(image_name)
-
-        # getting current contours coords
-        contours_coords.append(get_contour_centroid(contour))
-
-        # getting current contours areas
-        contours_areas.append(contourArea(contour))
-
-        # getting current contours area boxes
-        # area / area box
-        contours_area_boxes.append(get_area_box(contour))
-
-        # getting current contours' radius ratio
-        contours_rratios.append(get_contour_rratio(contour))
-
-        # getting current contours' aspect
-        contours_aspects.append(get_contour_aspect(contour))
-
-        # getting current contours' roundness
-        countours_roundnesses.append(get_contour_roundness(contour))
-
-    # by the end of that loop, you now have lists of the contours'
-    # information in order, now moving to organizing them into a dictionary
-
-    # assembling contours dict
-    contours_dict = {'image_name': image_names,
-                     'index': contours_indices,
-                     'centroid_coords': contours_coords,
-                     'area': contours_areas,
-                     'area_box': contours_area_boxes,
-                     'radius_ratio': contours_rratios,
-                     'aspect': contours_aspects,
-                     'roundness': countours_roundnesses
-                     }
-
-    # assembling contours df
-    image_contours_df = DataFrame(contours_dict)
-
-    # returning contours df
-    return image_contours_df
-
 def get_files_in_folder(path_to_folder: str,
-                                 extension: str
-                                 ) -> list:
+                        extension: str
+                        ) -> list:
     """
     Given a path to a folder, returns a list containing
     all files in folder that match given extension.
@@ -461,9 +333,9 @@ def get_files_in_folder(path_to_folder: str,
     all_files_in_folder = listdir(path_to_folder)
 
     # getting specific files
-    files_in_dir = [file                          # getting file
-                    for file                      # iterating over files
-                    in all_files_in_folder        # in input folder
+    files_in_dir = [file  # getting file
+                    for file  # iterating over files
+                    in all_files_in_folder  # in input folder
                     if file.endswith(extension)]  # only if file matches given extension
 
     # sorting list
@@ -471,69 +343,6 @@ def get_files_in_folder(path_to_folder: str,
 
     # returning list
     return files_in_dir
-
-
-def make_contours_dfs(image_name: str,
-                           image_path: str
-                          ) -> DataFrame:
-    """
-    # TODO escrever descrição
-    """
-    pass
-
-def make_contours_dfs(input_folder: str,
-                      images_extension: str,
-                      output_folder: str,
-                      ) -> None:
-    """
-    Given a path to a folder containing
-    cytoplasms masks, generates a df
-    containing the wanted information,
-    and saving the results
-    in the output folder.
-    """
-    # getting files in input folder
-    files = get_files_in_folder(path_to_folder=input_folder,
-                                extension=images_extension)
-    files_num = len(files)
-
-    # create empty list to hold the dfs
-    dfs_list = []
-
-    # iterating over files
-    for file_index, file in enumerate(files, 1):
-
-        # printing progress message
-        base_string = 'generating segmentation df #INDEX# of #TOTAL#'
-        print_progress_message(base_string=base_string,
-                               index=file_index,
-                               total=files_num)
-
-        # getting current image input/output paths
-        input_path = join(input_folder,
-                          file)
-
-        # get image contour df
-        image_df = make_image_contours_df(image_name=file,
-                                          image_path=input_path)
-
-        # append curr img df to dir df
-        dfs_list.append(image_df)
-
-    # concating "dfs" from dfs lists into
-    # a pandas dataframe
-    contour_df = concat(dfs_list, ignore_index=True)
-
-    # create the path to save the output path
-    output_path = join(output_folder,
-                       'contour_df.csv') # with the chosen extension
-
-    # saving df
-    contour_df.to_csv(output_path, index=False)
-
-    # printing execution message
-    print(f'output saved to {output_folder}')
-    print('analysis complete!')
 
 
 

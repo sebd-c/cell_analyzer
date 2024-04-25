@@ -10,15 +10,169 @@ print('initializing...')  # noqa
 
 # importing required libraries
 print('importing required libraries...')  # noqa
-from os.path import join
-from pandas import read_csv
-from pandas import DataFrame
 from argparse import ArgumentParser
-from src.utils.aux_funcs import get_contours_df
+from cv2 import imread
+from cv2 import contourArea
+from cv2 import findContours
+from cv2 import CHAIN_APPROX_NONE
+from cv2 import RETR_EXTERNAL
+from numpy import uint8 as np_uint8
+from pandas import concat
+from pandas import DataFrame
+from os.path import join
 from src.utils.aux_funcs import enter_to_continue
+from src.utils.aux_funcs import get_contour_centroid
+from src.utils.aux_funcs import get_area_box
+from src.utils.aux_funcs import get_contour_rratio
+from src.utils.aux_funcs import get_contour_ellipse_feats
+from src.utils.aux_funcs import get_contour_roundness
 from src.utils.aux_funcs import print_progress_message
+from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 print('all required libraries successfully imported.')  # noqa
+
+
+#####################################################################
+# module specific aux functions
+
+def make_image_contours_df(image_name: str,
+                           image_path: str
+                           ) -> DataFrame:
+    """
+    Given a path to a binary image,
+    finds contours and returns data
+    frame containing contours coords.
+    """
+    # reading image
+    image = imread(image_path,
+                   -1)
+
+    # binarizing image
+    image[image > 0] = 1
+
+    # converting int type
+    image = image.astype(np_uint8)
+
+    # finding contours in image
+    contours, _ = findContours(image, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+
+    # gets enumerate to have indexes
+    contours_enumerate = enumerate(contours, 1)
+
+    # create dfs list holder
+    contours_df_list = []
+
+    # loop inside an image
+    # to work with that images' contours
+    for contour_index, contour in contours_enumerate:
+
+        # getting current contour area
+        area = contourArea(contour)
+
+        # TODO: check why this is happening and if unavoidable, put in argparser
+        if area < 10:
+            continue
+
+        # getting current contour centroid coords
+        centroid_x, centroid_y = get_contour_centroid(contour)
+
+        # getting current contours area box
+        area_box = get_area_box(contour, area)
+
+        # getting current contour radius ratio
+        radius_ratio = get_contour_rratio(contour, (centroid_x, centroid_y))
+
+        # getting current contours' aspect and eccentricity, respectively
+        aspect, eccentricity = get_contour_ellipse_feats(contour)
+
+        # getting current contours' roundness
+        roundness = get_contour_roundness(contour, area)
+
+        # calculates cii as per Filippi-Chiela et al, 2012
+        cii = (0.9 * aspect) - (0.87 * area_box) + (0.96 * radius_ratio) + (0.92 * roundness)
+
+        # by the end of that loop, you now have a list of one contour features
+        # now moving to organizing them into a dictionary
+        contour_dict = {'image_name': image_name,
+                        'contour_index': contour_index,
+                        'cx_coords': centroid_x,
+                        'cy_coords': centroid_y,
+                        'area': area,
+                        'area_box': area_box,
+                        'radius_ratio': radius_ratio,
+                        'aspect': aspect,
+                        'eccentricity': eccentricity,
+                        'roundness': roundness,
+                        'cii': cii
+                        }
+
+        # assembling contour df, i.e, making a row
+        contour_df = DataFrame(contour_dict, index=[0])
+
+        # appending current df to dfs list
+        contours_df_list.append(contour_df)
+
+    # concating contour df into bigger df
+    # a pandas dataframe
+    concat_contours_df = concat(contours_df_list, ignore_index=True)
+
+    # returning contours df
+    return concat_contours_df
+
+
+def make_folder_contours_df(input_folder: str,
+                            images_extension: str,
+                            output_folder: str,
+                            ) -> None:
+    """
+    Given a path to a folder containing
+    cytoplasms masks, generates a df
+    containing the wanted information,
+    and saving the results
+    in the output folder.
+    """
+    # getting files in input folder
+    files = get_files_in_folder(path_to_folder=input_folder,
+                                extension=images_extension)
+    files_num = len(files)
+
+    # create empty list to hold the dfs
+    dfs_list = []
+
+    # iterating over files
+    for file_index, file in enumerate(files, 1):
+
+        # printing progress message
+        base_string = 'generating segmentation df #INDEX# of #TOTAL#'
+        print_progress_message(base_string=base_string,
+                               index=file_index,
+                               total=files_num)
+
+        # getting current image input/output paths
+        input_path = join(input_folder,
+                          file)
+
+        # get image contour df
+        image_df = make_image_contours_df(image_name=file,
+                                          image_path=input_path)
+
+        # append curr img df to dir df
+        dfs_list.append(image_df)
+
+    # concating "dfs" from dfs lists into
+    # a pandas dataframe
+    contour_df = concat(dfs_list, ignore_index=True)
+
+    # create the path to save the output path
+    output_path = join(output_folder,
+                       'contours_df.csv')
+
+    # saving df
+    contour_df.to_csv(output_path, index=False)
+
+    # printing execution message
+    print(f'output saved to {output_folder}')
+    print('analysis complete!')
 
 #####################################################################
 # argument parsing related functions
@@ -27,7 +181,6 @@ print('all required libraries successfully imported.')  # noqa
 def get_args_dict() -> dict:
     """
     Parses the arguments and returns a dictionary of the arguments.
-    :return: Dictionary. Represents the parsed arguments.
     """
     # defining program description
     description = 'generate segmentation df module'
@@ -62,107 +215,6 @@ def get_args_dict() -> dict:
     # returning the arguments dictionary
     return args_dict
 
-######################################################################
-# defining auxiliary functions
-
-
-def add_autophagy_col(df: DataFrame,
-                      images_folder: str,
-                      foci_masks_folder: str,
-                      images_extension: str,
-                      foci_min_area: int,
-                      ring_expansion: float
-                      ) -> None:
-    """
-    Given a crops info df, and paths to
-    foci masks, adds autophagy col
-    based on foci count/area.
-    """
-    # defining col name
-    col_name = 'class'
-
-    # emptying class col
-    df[col_name] = None
-
-    # getting rows num
-    rows_num = len(df)
-
-    # getting df rows
-    df_rows = df.iterrows()
-
-    # defining starter for current row index
-    current_row_index = 1
-
-    # iterating over df rows
-    for row_index, row_data in df_rows:
-
-        # printing progress message
-        base_string = 'adding autophagy col to row #INDEX# of #TOTAL#'
-        print_progress_message(base_string=base_string,
-                               index=current_row_index,
-                               total=rows_num)
-
-        # getting current row crop info
-        crop_name = row_data['crop_name']
-        width = row_data['width']
-        height = row_data['height']
-
-        # getting current row crop name with extension
-        crop_name_w_extension = f'{crop_name}{images_extension}'
-
-        # getting current row crop image/foci mask path
-        crop_path = join(images_folder,
-                         crop_name_w_extension)
-        foci_mask_path = join(foci_masks_folder,
-                              crop_name_w_extension)
-
-        # getting current crop contours df
-        contours_df = get_contours_df(image_name=crop_name,
-                                      image_path=foci_mask_path)
-
-        # filtering df by min foci area
-        contours_df = contours_df[contours_df['area'] >= foci_min_area]
-
-        # getting current crop foci count/area
-        foci_count = len(contours_df)
-        foci_area_col = contours_df['area']
-        foci_area_mean = foci_area_col.mean()
-
-        # getting current crop autophagy level
-        # current_class = get_autophagy_level(foci_count=foci_count,
-        #                                     foci_area_mean=foci_area_mean,
-        #                                     foci_count_threshold=FOCI_COUNT_THRESHOLD,
-        #                                     foci_area_mean_threshold=FOCI_AREA_MEAN_THRESHOLD)
-        # TODO: remove once test completed!
-        current_ratio = '>1' if current_ratio >= 1 else '<1'
-        current_class = f'{foci_count}_{current_ratio}'
-
-        # updating current row data
-        df.at[row_index, col_name] = current_class
-
-        # updating current row index
-        current_row_index += 1
-
-def get_cytoplasms_info()
-def generate_segmentation_df(input_folder: str,
-                             images_extension: str,
-                             output_path: str,
-                             ) -> None:
-    """
-    Given a path to a folder containing binary images
-    containing cytoplasm segmentation masks, extracts
-    data from masks, saving analysis data frame to
-    given output path.
-    """
-
-
-    # saving segmentation df
-    segmentation_df.to_csv(output_path,
-                         index=False)
-
-    # printing execution message
-    print(f'output saved to {output_path}')
-    print('analysis complete!')
 
 ######################################################################
 # defining main function
@@ -180,22 +232,19 @@ def main():
     images_extension = args_dict['images_extension']
 
     # getting output path
-    output_folder = args_dict['output_foler']
+    output_folder = args_dict['output_folder']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
 
     # waiting for user input
-    enter_to_continue()
+    # enter_to_continue()
 
-    # running generate_segmentation_df function
-    generate_segmentation_df(crops_file=crops_file,
-                             images_folder=images_folder,
-                             foci_masks_folder=foci_masks_folder,
-                             images_extension=images_extension,
-                             output_path=output_path,
-                             foci_min_area=foci_min_area,
-                             ring_expansion=ring_expansion)
+    # running function to get the segmentation df for a folder
+    make_folder_contours_df(input_folder=input_folder,
+                            images_extension=images_extension,
+                            output_folder=output_folder)
+
 
 ######################################################################
 # running main function
@@ -203,7 +252,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 ######################################################################
 # end of current module
