@@ -1,4 +1,5 @@
 # generate segmentation dfs module
+import numpy as np
 
 print('initializing...')  # noqa
 
@@ -20,6 +21,7 @@ from numpy import uint8 as np_uint8
 from pandas import concat
 from pandas import DataFrame
 from os.path import join
+from numpy import max
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
 from src.utils.aux_funcs import get_area_box
@@ -35,7 +37,9 @@ print('all required libraries successfully imported.')  # noqa
 #####################################################################
 # module specific aux functions
 
-def make_image_contours_df(image_name: str,
+def make_image_contours_df(mask_name: str,
+                           mask_path: str,
+                           image_name: str,
                            image_path: str
                            ) -> DataFrame:
     """
@@ -43,18 +47,39 @@ def make_image_contours_df(image_name: str,
     finds contours and returns data
     frame containing contours coords.
     """
-    # reading image
-    image = imread(image_path,
+    # reading mask and image
+    mask = imread(mask_path,
+                  -1)
+
+    image = imread(mask_path,
                    -1)
 
-    # binarizing image
-    image[image > 0] = 1
+    # separating contours before binarizing mask
+    max_intensity = mask.max()
 
-    # converting int type
-    image = image.astype(np_uint8)
+    # getting shape for new masks arrays
+    shape = mask.shape
 
-    # finding contours in image
-    contours, _ = findContours(image, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+    # empty list to hold contours
+    contours = []
+
+    # loop not to "join different contours"
+    for pixel_intensity in range(1, max_intensity + 1):
+
+        # create a new contour
+        single_contour = np.zeros(shape)
+
+        # putting the contour inside
+        single_contour[mask == pixel_intensity] = 1
+
+        # converting int type
+        single_contour = single_contour.astype(np_uint8)
+
+        # finding contours in image
+        contour, _ = findContours(single_contour, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+
+        # putting contour in list
+        contours.append(contour[0])
 
     # gets enumerate to have indexes
     contours_enumerate = enumerate(contours, 1)
@@ -93,7 +118,7 @@ def make_image_contours_df(image_name: str,
 
         # by the end of that loop, you now have a list of one contour features
         # now moving to organizing them into a dictionary
-        contour_dict = {'image_name': image_name,
+        contour_dict = {'image_name': mask_name,
                         'contour_index': contour_index,
                         'cx_coords': centroid_x,
                         'cy_coords': centroid_y,
@@ -111,6 +136,13 @@ def make_image_contours_df(image_name: str,
 
         # appending current df to dfs list
         contours_df_list.append(contour_df)
+
+        # drawing contour in original img
+        image = drawContours(image,
+                             contour,
+                             -1,
+                             color,
+                             thickness=thickness)
 
     # concating contour df into bigger df
     # a pandas dataframe
@@ -153,8 +185,8 @@ def make_folder_contours_df(input_folder: str,
                           file)
 
         # get image contour df
-        image_df = make_image_contours_df(image_name=file,
-                                          image_path=input_path)
+        image_df = make_image_contours_df(mask_name=file,
+                                          mask_path=input_path)
 
         # append curr img df to dir df
         dfs_list.append(image_df)
@@ -194,6 +226,12 @@ def get_args_dict() -> dict:
     parser.add_argument('-i', '--input-folder',
                         dest='input_folder',
                         required=True,
+                        help='defines path to folder containing original images')
+
+    # input folder param
+    parser.add_argument('-m', '--masks-folder',
+                        dest='masks_folder',
+                        required=True,
                         help='defines path to folder containing cellpose masks outputs')
 
     # images extension param
@@ -227,6 +265,9 @@ def main():
 
     # getting input folder
     input_folder = args_dict['input_folder']
+
+    # getting masks folder
+    masks_folder = args_dict['masks_folder']
 
     # getting images extension
     images_extension = args_dict['images_extension']
