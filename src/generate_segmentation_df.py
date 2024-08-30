@@ -15,6 +15,8 @@ from argparse import ArgumentParser
 from cv2 import imread
 from cv2 import contourArea
 from cv2 import findContours
+from cv2 import drawContours
+from cv2 import imwrite
 from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from numpy import uint8 as np_uint8
@@ -31,6 +33,7 @@ from src.utils.aux_funcs import get_contour_roundness
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
+
 print('all required libraries successfully imported.')  # noqa
 
 
@@ -39,8 +42,8 @@ print('all required libraries successfully imported.')  # noqa
 
 def make_image_contours_df(mask_name: str,
                            mask_path: str,
-                           image_name: str,
-                           image_path: str
+                           og_img_path: str,
+                           overlays_output_folder: str
                            ) -> DataFrame:
     """
     Given a path to a binary image,
@@ -51,7 +54,7 @@ def make_image_contours_df(mask_name: str,
     mask = imread(mask_path,
                   -1)
 
-    image = imread(mask_path,
+    image = imread(og_img_path,
                    -1)
 
     # separating contours before binarizing mask
@@ -62,10 +65,9 @@ def make_image_contours_df(mask_name: str,
 
     # empty list to hold contours
     contours = []
-
+     # todo nuclei segmentation
     # loop not to "join different contours"
     for pixel_intensity in range(1, max_intensity + 1):
-
         # create a new contour
         single_contour = np.zeros(shape)
 
@@ -137,24 +139,30 @@ def make_image_contours_df(mask_name: str,
         # appending current df to dfs list
         contours_df_list.append(contour_df)
 
-        # drawing contour in original img
-        image = drawContours(image,
-                             contour,
-                             -1,
-                             color,
-                             thickness=thickness)
-
     # concating contour df into bigger df
     # a pandas dataframe
     concat_contours_df = concat(contours_df_list, ignore_index=True)
+
+    # drawing contours in img
+    overlayed_image = drawContours(image,
+                                   contours,
+                                   -1,
+                                   (0, 255, 0),
+                                   thickness=2)
+
+    # saving layered img
+    overlays_output_path = join(overlays_output_folder, mask_name)
+    imwrite(overlays_output_path, overlayed_image)
 
     # returning contours df
     return concat_contours_df
 
 
-def make_folder_contours_df(input_folder: str,
-                            images_extension: str,
-                            output_folder: str,
+def make_folder_contours_df(masks_input_folder: str,
+                            og_imgs_input_folder: str,
+                            masks_img_extension: str,
+                            csv_output_folder: str,
+                            overlays_output_folder: str
                             ) -> None:
     """
     Given a path to a folder containing
@@ -163,30 +171,39 @@ def make_folder_contours_df(input_folder: str,
     and saving the results
     in the output folder.
     """
-    # getting files in input folder
-    files = get_files_in_folder(path_to_folder=input_folder,
-                                extension=images_extension)
-    files_num = len(files)
+    # getting masks files in respective input folder
+    mask_files = get_files_in_folder(path_to_folder=masks_input_folder,
+                                     extension=masks_img_extension)
+
+    masks_files_num = len(mask_files)
 
     # create empty list to hold the dfs
     dfs_list = []
 
     # iterating over files
-    for file_index, file in enumerate(files, 1):
-
+    for file_index, mask_file in enumerate(mask_files, 1):
         # printing progress message
         base_string = 'generating segmentation df #INDEX# of #TOTAL#'
         print_progress_message(base_string=base_string,
                                index=file_index,
-                               total=files_num)
+                               total=masks_files_num)
 
-        # getting current image input/output paths
-        input_path = join(input_folder,
-                          file)
+        # getting current image mask input/output paths
+        mask_input_path = join(masks_input_folder,
+                               mask_file)
 
-        # get image contour df
-        image_df = make_image_contours_df(mask_name=file,
-                                          mask_path=input_path)
+        # create img file name
+        og_img_file = mask_file.replace('_cp_masks', '')
+
+        # analogous getting current og image input/output paths
+        og_img_input_path = join(og_imgs_input_folder,
+                                 og_img_file)
+
+        # get image contour df and respective overlayed imgs
+        image_df = make_image_contours_df(mask_name=mask_file,
+                                          mask_path=mask_input_path,
+                                          og_img_path=og_img_input_path,
+                                          overlays_output_folder=overlays_output_folder)
 
         # append curr img df to dir df
         dfs_list.append(image_df)
@@ -196,15 +213,16 @@ def make_folder_contours_df(input_folder: str,
     contour_df = concat(dfs_list, ignore_index=True)
 
     # create the path to save the output path
-    output_path = join(output_folder,
+    output_path = join(csv_output_folder,
                        'contours_df.csv')
 
     # saving df
     contour_df.to_csv(output_path, index=False)
 
     # printing execution message
-    print(f'output saved to {output_folder}')
+    print(f'output saved to {csv_output_folder}')
     print('analysis complete!')
+
 
 #####################################################################
 # argument parsing related functions
@@ -223,12 +241,12 @@ def get_args_dict() -> dict:
     # adding arguments to parser
 
     # input folder param
-    parser.add_argument('-i', '--input-folder',
-                        dest='input_folder',
+    parser.add_argument('-i', '--images-folder',
+                        dest='images_folder',
                         required=True,
                         help='defines path to folder containing original images')
 
-    # input folder param
+    # input masks folder param
     parser.add_argument('-m', '--masks-folder',
                         dest='masks_folder',
                         required=True,
@@ -241,11 +259,17 @@ def get_args_dict() -> dict:
                         default='.tif',
                         help='defines extension (.tif, .png, .jpg) of images in input folders')
 
-    # output path param
-    parser.add_argument('-o', '--output_folder',
-                        dest='output_folder',
+    # csv output folder param
+    parser.add_argument('-co', '--csv_output_folder',
+                        dest='csv_output_folder',
                         required=True,
-                        help='defines path to output file (.csv)')
+                        help='defines path to output folder (csvs)')
+
+    # overlays output folder param
+    parser.add_argument('-oo', '--overlays_output_folder',
+                        dest='overlays_output_folder',
+                        required=True,
+                        help='defines path to output folder (overlays)')
 
     # creating arguments dictionary
     args_dict = vars(parser.parse_args())
@@ -263,28 +287,33 @@ def main():
     # getting args dict
     args_dict = get_args_dict()
 
-    # getting input folder
-    input_folder = args_dict['input_folder']
-
     # getting masks folder
     masks_folder = args_dict['masks_folder']
+
+    # getting images folder
+    images_folder = args_dict['images_folder']
 
     # getting images extension
     images_extension = args_dict['images_extension']
 
-    # getting output path
-    output_folder = args_dict['output_folder']
+    # getting csv output path
+    csv_output_folder = args_dict['csv_output_folder']
+
+    # getting overlays output path
+    overlays_output_folder = args_dict['overlays_output_folder']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
 
     # waiting for user input
-    # enter_to_continue()
+    enter_to_continue()
 
     # running function to get the segmentation df for a folder
-    make_folder_contours_df(input_folder=input_folder,
-                            images_extension=images_extension,
-                            output_folder=output_folder)
+    make_folder_contours_df(masks_input_folder=masks_folder,
+                            og_imgs_input_folder=images_folder,
+                            masks_img_extension=images_extension,
+                            csv_output_folder=csv_output_folder,
+                            overlays_output_folder=overlays_output_folder)
 
 
 ######################################################################
