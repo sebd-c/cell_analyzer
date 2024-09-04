@@ -17,6 +17,7 @@ from cv2 import contourArea
 from cv2 import findContours
 from cv2 import drawContours
 from cv2 import imwrite
+from cv2 import pointPolygonTest
 from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from numpy import uint8 as np_uint8
@@ -47,8 +48,9 @@ def make_image_contours_df(mask_name: str,
                            ) -> DataFrame:
     """
     Given a path to a binary image,
-    finds contours and returns data
-    frame containing contours coords.
+    finds contours and
+    returns data frame containing
+    contours desired infos.
     """
     # reading mask and image
     mask = imread(mask_path,
@@ -65,7 +67,7 @@ def make_image_contours_df(mask_name: str,
 
     # empty list to hold contours
     contours = []
-     # todo nuclei segmentation
+
     # loop not to "join different contours"
     for pixel_intensity in range(1, max_intensity + 1):
         # create a new contour
@@ -116,7 +118,7 @@ def make_image_contours_df(mask_name: str,
         roundness = get_contour_roundness(contour, area)
 
         # calculates cii as per Filippi-Chiela et al, 2012
-        cii = (0.9 * aspect) - (0.87 * area_box) + (0.96 * radius_ratio) + (0.92 * roundness)
+        ii = (0.9 * aspect) - (0.87 * area_box) + (0.96 * radius_ratio) + (0.92 * roundness)
 
         # by the end of that loop, you now have a list of one contour features
         # now moving to organizing them into a dictionary
@@ -130,7 +132,8 @@ def make_image_contours_df(mask_name: str,
                         'aspect': aspect,
                         'eccentricity': eccentricity,
                         'roundness': roundness,
-                        'cii': cii
+                        'ii': ii,
+                        'contour': contour
                         }
 
         # assembling contour df, i.e, making a row
@@ -156,6 +159,67 @@ def make_image_contours_df(mask_name: str,
 
     # returning contours df
     return concat_contours_df
+
+
+def link_cytnuc(cyt_df: DataFrame, nuc_df: DataFrame) -> DataFrame:
+    """
+    given a df from cytoplasm segmentation,
+    and its respective nuclei df segmentation,
+    associates each nucleus with its parent cytoplasm
+    into a new df
+    """
+
+    # make a list as placeholder while making new linked df
+    linked_dfs_list = []
+
+    # loop of nucleus through the cytoplasm df
+    for nucleus_index, nuc_row in nuc_df.iterrows():
+        for cyto_index, cyto_row in cyt_df.iterrows():
+            # checking if it's a match parent cytoplasm
+            # and if it is, 0 or 1,
+            if pointPolygonTest(cyto_row['contour'],
+                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
+                                measureDist=False) > -1:
+                # if the nucleus is nested in the contour,
+                # start a new df, with both df information
+                linked_dict = {'image_name': cyto_row['image_name'],
+                               'cyto_id': cyto_row['contour_index'],
+                               'cyto_cx': cyto_row['cx_coords'],
+                               'cyto_cy': cyto_row['cy_coords'],
+                               'cyto_area': cyto_row['area'],
+                               'cyto_arbox': cyto_row['area_box'],
+                               'cyto_radra': cyto_row['radius_ratio'],
+                               'cyto_asp': cyto_row['aspect'],
+                               'cyto_ecc': cyto_row['eccentricity'],
+                               'cyto_rou': cyto_row['roundness'],
+                               'cii': cyto_row['ii'],
+                               'cyto_contour': cyto_row['contour'],
+                               'nuc_id': nuc_row['contour_index'],
+                               'nuc_cx': nuc_row['cx_coords'],
+                               'nuc_cy': nuc_row['cy_coords'],
+                               'nuc_area': nuc_row['area'],
+                               'nuc_arbox': nuc_row['area_box'],
+                               'nuc_radra': nuc_row['radius_ratio'],
+                               'nuc_asp': nuc_row['aspect'],
+                               'nuc_ecc': nuc_row['eccentricity'],
+                               'nuc_rou': nuc_row['roundness'],
+                               'nii': nuc_row['ii'],
+                               'nuc_contour': nuc_row['contour'],
+                               }
+                # since you found the parent cytoplasm,
+                # you need to break the loop to move into the other nuclei
+                break
+
+        # make the new dictionary into a temporary one row df
+        linked_df = DataFrame(linked_dict, index=[0])
+
+        # append the newly made df into a list
+        linked_dfs_list.append(linked_df)
+    # concating contour df into bigger df
+    # a pandas dataframe
+    concat_linked_df = concat(linked_dfs_list, ignore_index=True)
+
+    return concat_linked_df
 
 
 def make_folder_contours_df(masks_input_folder: str,
@@ -222,6 +286,8 @@ def make_folder_contours_df(masks_input_folder: str,
     # printing execution message
     print(f'output saved to {csv_output_folder}')
     print('analysis complete!')
+
+    return
 
 
 #####################################################################
