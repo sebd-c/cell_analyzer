@@ -202,6 +202,67 @@ def make_image_contours_df(mask_name: str,
     return concat_contours_df
 
 
+def link_cytnuc(cyt_df: DataFrame, nuc_df: DataFrame) -> DataFrame:
+    """
+    given a df from cytoplasm segmentation,
+    and its respective nuclei df segmentation,
+    associates each nucleus with its parent cytoplasm
+    into a new df
+    """
+
+    # make a list as placeholder while making new linked df
+    linked_dfs_list = []
+
+    # loop of nucleus through the cytoplasm df
+    for nucleus_index, nuc_row in nuc_df.iterrows():
+        for cyto_index, cyto_row in cyt_df.iterrows():
+            # checking if it's a match parent cytoplasm
+            # and if it is, 0 or 1,
+            if pointPolygonTest(cyto_row['contour'],
+                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
+                                measureDist=False) > -1:
+                # if the nucleus is nested in the contour,
+                # start a new df, with both df information
+                linked_dict = {'image_name': cyto_row['image_name'],
+                               'cyto_id': cyto_row['contour_index'],
+                               'cyto_cx': cyto_row['cx_coords'],
+                               'cyto_cy': cyto_row['cy_coords'],
+                               'cyto_area': cyto_row['area'],
+                               'cyto_arbox': cyto_row['area_box'],
+                               'cyto_radra': cyto_row['radius_ratio'],
+                               'cyto_asp': cyto_row['aspect'],
+                               'cyto_ecc': cyto_row['eccentricity'],
+                               'cyto_rou': cyto_row['roundness'],
+                               'cii': cyto_row['ii'],
+                               'cyto_contour': cyto_row['contour'],
+                               'nuc_id': nuc_row['contour_index'],
+                               'nuc_cx': nuc_row['cx_coords'],
+                               'nuc_cy': nuc_row['cy_coords'],
+                               'nuc_area': nuc_row['area'],
+                               'nuc_arbox': nuc_row['area_box'],
+                               'nuc_radra': nuc_row['radius_ratio'],
+                               'nuc_asp': nuc_row['aspect'],
+                               'nuc_ecc': nuc_row['eccentricity'],
+                               'nuc_rou': nuc_row['roundness'],
+                               'nii': nuc_row['ii'],
+                               'nuc_contour': nuc_row['contour'],
+                               }
+                # since you found the parent cytoplasm,
+                # you need to break the loop to move into the other nuclei
+                break
+
+        # make the new dictionary into a temporary one row df
+        linked_df = DataFrame(linked_dict, index=[0])
+
+        # append the newly made df into a list
+        linked_dfs_list.append(linked_df)
+    # concating contour df into bigger df
+    # a pandas dataframe
+    concat_linked_df = concat(linked_dfs_list, ignore_index=True)
+
+    return concat_linked_df
+
+
 def make_folder_contours_df(masks_input_folder: str,
                             og_imgs_input_folder: str,
                             masks_img_extension: str,
