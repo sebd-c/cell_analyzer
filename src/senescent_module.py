@@ -28,6 +28,7 @@ from pandas import concat
 from pandas import DataFrame
 from os.path import join
 from numpy import max
+from numpy import zeros as np_zeroes
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
 from src.utils.aux_funcs import get_area_box
@@ -43,28 +44,53 @@ print('all required libraries successfully imported.')  # noqa
 
 #####################################################################
 # module specific aux functions
-
-def make_image_contours_df(mask_name: str,
-                           mask_path: str,
-                           og_img_path: str,
-                           overlays_output_folder: str,
-                           contour_type:str
-                           ) -> DataFrame:
+def get_contour_pixels(contours_df: DataFrame,
+                       img_path: str
+                       ) -> None:
     """
-    Given a path to a binary image,
-    finds contours and
-    returns data frame containing
-    contours desired infos.
+    Given a df containing a list of contours,
+    returns the df with a filled column
+    that is a list of all that contour's
+    pixel x, y coordinates
+    """
+
+    phase_img = imread(img_path,
+                       -1)
+    img_height, img_width, _ = phase_img.shape
+
+    for df_index, df_row in contours_df.iterrows():
+
+    blank_img = np_zeroes((img_height, img_width))
+
+    # For each list of contour points...
+    for i in range(len(contours)):
+        # Create a mask image that contains the contour filled in
+        cimg = np.zeros_like(img)
+        cv2.drawContours(cimg, contours, i, color=255, thickness=-1)
+
+        # Access the image pixels and create a 1D numpy array then add to list
+        pts = np.where(cimg == 255)
+        lst_intensities.append(img[pts[0], pts[1]])
+    pass
+
+
+def add_pixel_vals_df_image(image_name: str,
+                            image_path: str,
+                            cytnuc_df_path: str,
+                            overlays_output_folder: str,
+                            ) -> DataFrame:
+    """
+    Given a path to an RGB image, marked for xgal
+    gets pixel values to add mean, median, integrated sum,
+    higrest and lowest pixel intensity value
+    for red, green and blue for a specific cytoplasm contour
+    returns data frame containing with said columns addedd
     """
     # reading mask and image
-    mask = imread(mask_path,
-                  -1)
+    xgal_img = imread(image_path,
+                      1)
 
-    image = imread(og_img_path,
-                   -1)
 
-    # separating contours before binarizing mask
-    max_intensity = mask.max()
 
     # getting shape for new masks arrays
     shape = mask.shape

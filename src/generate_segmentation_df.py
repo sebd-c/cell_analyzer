@@ -24,6 +24,9 @@ from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from cv2 import FONT_HERSHEY_COMPLEX
 from numpy import uint8 as np_uint8
+from numpy import where as np_where
+from numpy import shape as np_shape
+from numpy import nonzero
 from pandas import concat
 from pandas import DataFrame
 from os.path import join
@@ -48,7 +51,7 @@ def make_image_contours_df(mask_name: str,
                            mask_path: str,
                            og_img_path: str,
                            overlays_output_folder: str,
-                           contour_type:str
+                           contour_type: str
                            ) -> DataFrame:
     """
     Given a path to a binary image,
@@ -56,6 +59,35 @@ def make_image_contours_df(mask_name: str,
     returns data frame containing
     contours desired infos.
     """
+
+    # making prep to put outlines and labels
+    # fontScale
+    font_scale = 1
+
+    # fontStyle
+    font_style = LINE_8
+
+    # Line thickness
+    thickness = 2
+
+    # colors in BGR
+    green = (0, 255, 0)
+    red = (0, 0, 255)
+    blue = (255, 0, 0)
+
+    # set font style
+    font = FONT_HERSHEY_COMPLEX
+
+    # specifying color by type of segmentation
+    # to ease visualization
+    if contour_type == 'cyto':
+        color = green
+    elif contour_type == 'nuc':
+        color = red
+    else:
+        color = blue
+
+    # now we begin with the contours per si
     # reading mask and image
     mask = imread(mask_path,
                   -1)
@@ -72,22 +104,36 @@ def make_image_contours_df(mask_name: str,
     # empty list to hold contours
     contours = []
 
+    # empty list to hold contours pixel coords
+    contours_pixel_coords = []
+
+    # TODO: lembra de tirar isso dps...
+
+    color = 255
     # loop not to "join different contours"
     for pixel_intensity in range(1, max_intensity + 1):
-        # create a new contour
-        single_contour = np.zeros(shape)
+        # create a new blank img
+        single_contour_img = np.zeros(shape)
 
         # putting the contour inside
-        single_contour[mask == pixel_intensity] = 1
+        single_contour_img[mask == pixel_intensity] = 1
 
         # converting int type
-        single_contour = single_contour.astype(np_uint8)
+        single_contour_img = single_contour_img.astype(np_uint8)
 
-        # finding contours in image
-        contour, _ = findContours(single_contour, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+        # getting the coordinates of the non-zero elements in a list of tuples
+        contour_pixel_coords = list(zip(*nonzero(single_contour_img)))
+        # contour_pixel_coords = zip(*nonzero(single_contour_img))
+        cshape = np_shape(contour_pixel_coords)
+
+        # finding contour in image
+        contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
 
         # putting contour in list
         contours.append(contour[0])
+
+        # making list of lists of pixel coord
+        contours_pixel_coords.append(contour_pixel_coords)
 
     # gets enumerate to have indexes
     contours_enumerate = enumerate(contours, 1)
@@ -137,7 +183,9 @@ def make_image_contours_df(mask_name: str,
                         'eccentricity': eccentricity,
                         'roundness': roundness,
                         'ii': ii,
-                        'contour': contour
+                        # TODO: fix the way elements enter the df
+                        # 'contour': contour,
+                        # 'pixel_coords_list': contours_pixel_coords[contour_index]
                         }
 
         # assembling contour df, i.e, making a row
@@ -146,36 +194,20 @@ def make_image_contours_df(mask_name: str,
         # appending current df to dfs list
         contours_df_list.append(contour_df)
 
+        # the following is not related to the dict
+        # but using the loop in the contours list
+        putText(image,
+                str(contour_index),
+                (centroid_x, centroid_y),
+                font,
+                font_scale,
+                color,
+                thickness,
+                font_style)
+
     # concating contour df into bigger df
     # a pandas dataframe
     concat_contours_df = concat(contours_df_list, ignore_index=True)
-
-    # making prep to put outlines and labels
-    # fontScale
-    font_scale = 1
-
-    # fontStyle
-    font_style = LINE_8
-
-    # Line thickness
-    thickness = 2
-
-    # colors in BGR
-    green = (0, 255, 0)
-    red = (0, 0, 255)
-    blue = (255, 0, 0)
-
-    # set font style
-    font = FONT_HERSHEY_COMPLEX
-
-    # specifying color by type of segmentation
-    # to ease visualization
-    if contour_type == 'cyto':
-        color = green
-    elif contour_type == 'nuc':
-        color = red
-    else:
-        color = blue
 
     # drawing contours in img
     overlayed_image = drawContours(image,
@@ -183,16 +215,6 @@ def make_image_contours_df(mask_name: str,
                                    -1,
                                    color,
                                    thickness)
-
-    for contour_index, contour in enumerate(contours, 1):
-        putText(image,
-                contour_index,
-                get_contour_centroid(contour),
-                font,
-                font_scale,
-                color,
-                thickness,
-                font_style)
 
     # saving layered img
     overlays_output_path = join(overlays_output_folder, mask_name)
@@ -206,7 +228,8 @@ def make_folder_contours_df(masks_input_folder: str,
                             og_imgs_input_folder: str,
                             masks_img_extension: str,
                             csv_output_folder: str,
-                            overlays_output_folder: str
+                            overlays_output_folder: str,
+                            segmentation_type: str
                             ) -> None:
     """
     Given a path to a folder containing
@@ -219,12 +242,16 @@ def make_folder_contours_df(masks_input_folder: str,
     mask_files = get_files_in_folder(path_to_folder=masks_input_folder,
                                      extension=masks_img_extension)
 
+    # analogous to og imgs
+    og_files = get_files_in_folder(path_to_folder=og_imgs_input_folder,
+                                   extension=masks_img_extension)
+
     masks_files_num = len(mask_files)
 
     # create empty list to hold the dfs
     dfs_list = []
 
-    # iterating over files
+    # iterating over mask files
     for file_index, mask_file in enumerate(mask_files, 1):
         # printing progress message
         base_string = 'generating segmentation df #INDEX# of #TOTAL#'
@@ -236,8 +263,8 @@ def make_folder_contours_df(masks_input_folder: str,
         mask_input_path = join(masks_input_folder,
                                mask_file)
 
-        # create img file name
-        og_img_file = mask_file.replace('_cp_masks', '')
+        # getting respective og img
+        og_img_file = og_files[file_index - 1]
 
         # analogous getting current og image input/output paths
         og_img_input_path = join(og_imgs_input_folder,
@@ -247,7 +274,9 @@ def make_folder_contours_df(masks_input_folder: str,
         image_df = make_image_contours_df(mask_name=mask_file,
                                           mask_path=mask_input_path,
                                           og_img_path=og_img_input_path,
-                                          overlays_output_folder=overlays_output_folder)
+                                          overlays_output_folder=overlays_output_folder,
+                                          contour_type=segmentation_type
+                                          )
 
         # append curr img df to dir df
         dfs_list.append(image_df)
@@ -309,13 +338,19 @@ def get_args_dict() -> dict:
     parser.add_argument('-co', '--csv_output_folder',
                         dest='csv_output_folder',
                         required=True,
-                        help='defines path to output folder (csvs)')
+                        help='defines path to output folder (csv)')
 
     # overlays output folder param
     parser.add_argument('-oo', '--overlays_output_folder',
                         dest='overlays_output_folder',
                         required=True,
                         help='defines path to output folder (overlays)')
+
+    # overlays output folder param
+    parser.add_argument('-st', '--segmentation_type',
+                        dest='segmentation_type',
+                        required=True,
+                        help='defines wich type of segmentation it is. "nuc" or "cyto"')
 
     # creating arguments dictionary
     args_dict = vars(parser.parse_args())
@@ -348,6 +383,9 @@ def main():
     # getting overlays output path
     overlays_output_folder = args_dict['overlays_output_folder']
 
+    # getting type of segmentation
+    segmentation_type = args_dict['segmentation_type']
+
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
 
@@ -359,7 +397,8 @@ def main():
                             og_imgs_input_folder=images_folder,
                             masks_img_extension=images_extension,
                             csv_output_folder=csv_output_folder,
-                            overlays_output_folder=overlays_output_folder)
+                            overlays_output_folder=overlays_output_folder,
+                            segmentation_type=segmentation_type)
 
 
 ######################################################################

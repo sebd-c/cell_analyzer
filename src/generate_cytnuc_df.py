@@ -59,14 +59,18 @@ def link_cytnuc(cyt_df: DataFrame,
     # make a list as placeholder while making new linked df
     linked_dfs_list = []
 
+    # TODO: mexer aqui pra só loopar nas imgs de msm nome
+
     # loop of nucleus through the cytoplasm df
     for nucleus_index, nuc_row in nuc_df.iterrows():
-        for cyto_index, cyto_row in cyt_df.iterrows():
+        cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_df['image_name']]
+        for cyto_index, cyto_row in cyt_df_img.iterrows():
             # checking if it's a match parent cytoplasm
             # and if it is, 0 or 1,
-            if pointPolygonTest(cyto_row['contour'],
-                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
-                                measureDist=False) > -1:
+            # if pointPolygonTest(cyto_row['contour'],
+            #                     (nuc_row['cx_coords'], nuc_row['cy_coords']),
+            #                     measureDist=False) > -1:
+            if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
                 # if the nucleus is nested in the contour,
                 # start a new df, with both df information
                 linked_dict = {'image_name': cyto_row['image_name'],
@@ -169,29 +173,41 @@ def get_args_dict() -> dict:
     # adding arguments to parser
 
     # input folder param
-    parser.add_argument('-i', '--images-folder',
-                        dest='images_folder',
+    parser.add_argument('-cf', '--cyto_images_folder',
+                        dest='cyto_images_folder',
                         required=True,
-                        help='defines path to folder containing original images')
+                        help='defines path to folder containing overlayed cytoplasm images')
 
-    # input masks folder param
-    parser.add_argument('-m', '--masks-folder',
-                        dest='masks_folder',
+    # input folder param
+    parser.add_argument('-nf', '--nuc_images_folder',
+                        dest='cyto_images_folder',
                         required=True,
-                        help='defines path to folder containing cellpose masks outputs')
+                        help='defines path to folder containing overlayed nuclei images')
 
     # images extension param
-    parser.add_argument('-x', '--images-extension',
+    parser.add_argument('-x', '--images_extension',
                         dest='images_extension',
                         required=False,
                         default='.tif',
                         help='defines extension (.tif, .png, .jpg) of images in input folders')
 
-    # csv output folder param
-    parser.add_argument('-co', '--csv_output_folder',
-                        dest='csv_output_folder',
+    # csv cytoplasm input folder param
+    parser.add_argument('-cic', '--cyto_input_csv',
+                        dest='cyto_input_csv',
                         required=True,
-                        help='defines path to output folder (csvs)')
+                        help='defines path to input cytoplasm csv')
+
+    # overlays output folder param
+    parser.add_argument('-nic', '--nuc_input_csv',
+                        dest='nuc_input_csv',
+                        required=True,
+                        help='defines path to output folder (overlays)')
+
+    # overlays output folder param
+    parser.add_argument('-oo', '--overlays_output_folder',
+                        dest='overlays_output_folder',
+                        required=True,
+                        help='defines path to output folder (overlays)')
 
     # overlays output folder param
     parser.add_argument('-oo', '--overlays_output_folder',
