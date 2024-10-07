@@ -58,6 +58,7 @@ def get_contour_pixels(contours_df: DataFrame,
                        -1)
     img_height, img_width, _ = phase_img.shape
 
+
     for df_index, df_row in contours_df.iterrows():
 
     blank_img = np_zeroes((img_height, img_width))
@@ -73,6 +74,103 @@ def get_contour_pixels(contours_df: DataFrame,
         lst_intensities.append(img[pts[0], pts[1]])
     pass
 
+
+def get_contour_pixel_summary(cell_df: DataFrame,
+                              img_path: str
+                              ) -> None:
+    """
+    Given a df containing a list
+    of pixel x, y coordinates, returns the df
+    appended by the columns of interested pixel interest values,
+    based on cytoplasm and on nucleus.
+    """
+
+    # read original image
+    phase_img = imread(img_path,
+                       -1)
+
+    # get img shape to "make it a map"
+    img_height, img_width, _ = phase_img.shape
+
+    # getting image by channel
+    # since opencv works in BGR module, the order is
+    blue = phase_img[:, :, 0]  # get blue channel
+    green = phase_img[:, :, 1]  # get green channel
+    red = phase_img[:, :, 2]  # get red channel
+
+    # make empty lists as placeholders for wanted values
+    # here it's temporarily separated by cytoplasm and nuclei because
+    # it's still in trial which is the optimal way to display/which
+    # retains more biologically accurate to the human-stablished ground truth
+    cyt_blue_mean = []
+    cyt_blue_median = []
+    cyt_blue_integrated_sum = []
+    cyt_blue_max = []
+    cyt_blue_min = []
+    cyt_green_mean = []
+    cyt_green_median = []
+    cyt_green_integrated_sum = []
+    cyt_green_max = []
+    cyt_green_min = []
+    cyt_red_mean = []
+    cyt_red_median = []
+    cyt_red_integrated_sum = []
+    cyt_red_max = []
+    cyt_red_min = []
+
+    nuc_blue_mean = []
+    nuc_blue_median = []
+    nuc_blue_integrated_sum = []
+    nuc_blue_max = []
+    nuc_blue_min = []
+    nuc_green_mean = []
+    nuc_green_median = []
+    nuc_green_integrated_sum = []
+    nuc_green_max = []
+    nuc_green_min = []
+    nuc_red_mean = []
+    nuc_red_median = []
+    nuc_red_integrated_sum = []
+    nuc_red_max = []
+    nuc_red_min = []
+
+    # start loop in the df
+    for cell_index, cell_row in cell_df.iterrows():
+
+        # since the coords are in a list to fit Pandas DataFrame
+        # first get the list of the list
+        list_pixel_coords = cell_row['pixel_coords_list']
+        # and then extract the element
+        pixel_coords = list_pixel_coords[0]
+
+        # beging cytoplasm process
+        # start counter for variables that need all the values
+        cyt_blue_mean = 0
+        cyt_blue_median = 0
+        cyt_blue_integrated_sum = 0
+        cyt_blue_max = float('-inf')
+        cyt_blue_min = float('inf')
+        cyt_green_mean = 0
+        cyt_green_median = 0
+        cyt_green_integrated_sum = 0
+        cyt_green_max = float('-inf')
+        cyt_green_min = float('inf')
+        cyt_red_mean = 0
+        cyt_red_median = 0
+        cyt_red_integrated_sum = 0
+        cyt_red_max = float('-inf')
+        cyt_red_min = float('inf')
+        # begin second loop, in which you'll atain the variables per si
+        for pixel_coord in pixel_coords:
+
+            # since the coord comes from numpy,
+            # but the img is read in open cv
+            # the order of x and y labels is shifted
+            y, x = pixel_coord
+
+            # getting each pixel intensity
+
+        pass
 
 def add_pixel_vals_df_image(image_name: str,
                             image_path: str,

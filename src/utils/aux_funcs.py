@@ -345,4 +345,64 @@ def get_files_in_folder(path_to_folder: str,
     return files_in_dir
 
 
+def make_contour_label():
+    # making prep to put outlines and labels
+    # fontScale
+    font_scale = 1
 
+    # fontStyle
+    font_style = LINE_8
+
+    # Line thickness
+    thickness = 2
+
+    # colors in BGR
+    green = (0, 255, 0)
+    red = (0, 0, 255)
+    blue = (255, 0, 0)
+
+    # set font style
+    font = FONT_HERSHEY_COMPLEX
+
+    # specifying color by type of segmentation
+    # to ease visualization
+    if contour_type == 'cyto':
+        color = green
+    elif contour_type == 'nuc':
+        color = red
+    else:
+        color = blue
+
+    color = 255
+
+    # the following is not related to the dict
+    # but using the loop in the contours list
+    putText(image,
+            str(contour_index),
+            (centroid_x, centroid_y),
+            font,
+            font_scale,
+            color,
+            thickness,
+            font_style)
+
+    # drawing contours in img
+    overlayed_image = drawContours(image,
+                                   contours,
+                                   -1,
+                                   color,
+                                   thickness)
+
+    # saving layered img
+    overlays_output_path = join(overlays_output_folder, mask_name)
+    imwrite(overlays_output_path, overlayed_image)
+
+    pass
+
+
+def make_img_outlayers():
+    pass
+
+
+def get_pixel_summary():
+    pass

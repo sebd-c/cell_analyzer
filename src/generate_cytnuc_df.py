@@ -59,20 +59,32 @@ def link_cytnuc(cyt_df: DataFrame,
     # make a list as placeholder while making new linked df
     linked_dfs_list = []
 
-    # TODO: mexer aqui pra só loopar nas imgs de msm nome
-
     # loop of nucleus through the cytoplasm df
     for nucleus_index, nuc_row in nuc_df.iterrows():
+        # conditional to loop only in the cytoplasms
+        # that have matching img name as the nucleus
         cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_df['image_name']]
+
         for cyto_index, cyto_row in cyt_df_img.iterrows():
-            # checking if it's a match parent cytoplasm
-            # and if it is, 0 or 1,
-            # if pointPolygonTest(cyto_row['contour'],
-            #                     (nuc_row['cx_coords'], nuc_row['cy_coords']),
-            #                     measureDist=False) > -1:
-            if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
+            # remember to put the contour into the df
+            # we adapted it with a surplus of brackets
+            # before proceeding, you need to remove that surplus of brackets
+            unextracted_cyto = cyto_row['contour']
+            extracted_cyto = unextracted_cyto[0]
+
+            # now use this cv2 function to
+            # test if a point is inside an object
+            if pointPolygonTest(extracted_cyto,
+                                # if it is, it'll be a match parent cytoplasm
+                                # measureDist 0 or 1
+                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
+                                measureDist=False) > -1:
+
+                # if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
                 # if the nucleus is nested in the contour,
-                # start a new df, with both df information
+
+                # having the tested pointed out it's a parent,
+                # begin making a row for the new joint df
                 linked_dict = {'image_name': cyto_row['image_name'],
                                'cyto_id': cyto_row['contour_index'],
                                'cyto_cx': cyto_row['cx_coords'],
@@ -97,6 +109,7 @@ def link_cytnuc(cyt_df: DataFrame,
                                'nii': nuc_row['ii'],
                                'nuc_contour': nuc_row['contour'],
                                }
+
                 # make the new dictionary into a temporary one row df
                 linked_df = DataFrame(linked_dict, index=[0])
 
