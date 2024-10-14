@@ -13,10 +13,19 @@ from sys import stdout
 from numpy import ndarray
 from cv2 import moments
 from cv2 import minAreaRect
+from cv2 import FONT_HERSHEY_COMPLEX
+from cv2 import putText
+from cv2 import LINE_8
+from cv2 import imwrite
+from cv2 import drawContours
 from math import sqrt
 from cv2 import fitEllipse
 from cv2 import arcLength
 from math import pi
+from os.path import join
+from numpy import mean
+from numpy import median
+from numpy import min
 
 ######################################################################
 # defining auxiliary functions
@@ -345,7 +354,16 @@ def get_files_in_folder(path_to_folder: str,
     return files_in_dir
 
 
-def make_contour_label():
+def make_contour_label(contour_index: int,
+                       centroid_x: float,
+                       centroid_y: float,
+                       color: tuple,
+                       thickness: int,
+                       img_to_label: ndarray,
+                       ):
+    """
+    Writes a single contour label in an image
+    """
     # making prep to put outlines and labels
     # fontScale
     font_scale = 1
@@ -353,56 +371,70 @@ def make_contour_label():
     # fontStyle
     font_style = LINE_8
 
-    # Line thickness
-    thickness = 2
-
-    # colors in BGR
-    green = (0, 255, 0)
-    red = (0, 0, 255)
-    blue = (255, 0, 0)
-
     # set font style
     font = FONT_HERSHEY_COMPLEX
 
-    # specifying color by type of segmentation
-    # to ease visualization
-    if contour_type == 'cyto':
-        color = green
-    elif contour_type == 'nuc':
-        color = red
-    else:
-        color = blue
-
-    color = 255
-
     # the following is not related to the dict
     # but using the loop in the contours list
-    putText(image,
+    putText(img_to_label,
             str(contour_index),
-            (centroid_x, centroid_y),
+            (int(centroid_x), int(centroid_y)),
             font,
             font_scale,
             color,
             thickness,
             font_style)
 
+
+def make_img_outlayers(contours: list,
+                       img_to_label: ndarray,
+                       contour_type: str,
+                       image_name: str,
+                       overlays_output_folder: str):
+    # Line thickness
+    thickness = 2
+
+    # colors in BGR
+    red = (0, 0, 255)
+    green = (0, 255, 0)
+    blue = (255, 0, 0)
+
+    # specifying color by type of segmentation
+    # to ease visualization
+    if contour_type == 'cyto':
+        color = green
+    elif contour_type == 'nuc' or contour_type == 'xgal':
+        color = red
+    elif contour_type:
+        color = blue
+
     # drawing contours in img
-    overlayed_image = drawContours(image,
+    overlayed_image = drawContours(img_to_label,
                                    contours,
                                    -1,
                                    color,
                                    thickness)
 
     # saving layered img
-    overlays_output_path = join(overlays_output_folder, mask_name)
+    overlays_output_path = join(overlays_output_folder, image_name)
     imwrite(overlays_output_path, overlayed_image)
 
-    pass
 
+def get_pixint_summary(pixint_list: list
+                       ) -> dict:
+    """
+    Given a list of pixel intensity values,
+    returns a dictionary containing the mean,
+    median, integrated sum, max and min values
+    of pixel intensity for a given contour
+    """
 
-def make_img_outlayers():
-    pass
+    # get integrated sum
+    integrated_intensity = sum(pixint_list)
 
+    # get mean
+    mean_intensity = mean(pixint_list)
+    # get median
+    # get max pixel value
+    # get min pixel value
 
-def get_pixel_summary():
-    pass

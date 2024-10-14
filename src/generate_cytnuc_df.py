@@ -127,10 +127,10 @@ def link_cytnuc(cyt_df: DataFrame,
     # saving new df
     concat_linked_df.to_csv(output_path, index=False)
 
-    return
+    return concat_linked_df
 
 
-def make_folder_cytnuc(cyt_csv_input_path: str,
+def make_cytnuc_output(cyt_csv_input_path: str,
                        nuc_csv_input_path: str,
                        nuc_overlayed_input_folder: str,
                        cyto_overlayed_input_folder: str,
