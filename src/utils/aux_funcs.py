@@ -357,9 +357,10 @@ def get_files_in_folder(path_to_folder: str,
 def make_contour_label(contour_index: int,
                        centroid_x: float,
                        centroid_y: float,
-                       color: tuple,
+                       color: int or tuple,
                        thickness: int,
                        img_to_label: ndarray,
+                       contour: ndarray,
                        ):
     """
     Writes a single contour label in an image
@@ -385,56 +386,28 @@ def make_contour_label(contour_index: int,
             thickness,
             font_style)
 
-
-def make_img_outlayers(contours: list,
-                       img_to_label: ndarray,
-                       contour_type: str,
-                       image_name: str,
-                       overlays_output_folder: str):
-    # Line thickness
-    thickness = 2
-
-    # colors in BGR
-    red = (0, 0, 255)
-    green = (0, 255, 0)
-    blue = (255, 0, 0)
-
-    # specifying color by type of segmentation
-    # to ease visualization
-    if contour_type == 'cyto':
-        color = green
-    elif contour_type == 'nuc' or contour_type == 'xgal':
-        color = red
-    elif contour_type:
-        color = blue
-
     # drawing contours in img
-    overlayed_image = drawContours(img_to_label,
-                                   contours,
-                                   -1,
-                                   color,
-                                   thickness)
-
-    # saving layered img
-    overlays_output_path = join(overlays_output_folder, image_name)
-    imwrite(overlays_output_path, overlayed_image)
+    drawContours(img_to_label,
+                 [contour],
+                 -1,
+                 color,
+                 thickness)
 
 
-def get_pixint_summary(pixint_list: list
-                       ) -> dict:
+def save_img_outlayers(overlays_output_folder: str,
+                       mask_name: str,
+                       img_to_label: ndarray
+                       ) -> None:
     """
-    Given a list of pixel intensity values,
-    returns a dictionary containing the mean,
-    median, integrated sum, max and min values
-    of pixel intensity for a given contour
+    saves already labeled images in designated directory
     """
+    overlays_output_path = join(overlays_output_folder, mask_name)
+    imwrite(overlays_output_path, img_to_label)
 
-    # get integrated sum
-    integrated_intensity = sum(pixint_list)
+    return
 
-    # get mean
-    mean_intensity = mean(pixint_list)
-    # get median
-    # get max pixel value
-    # get min pixel value
+
+
+
+
 

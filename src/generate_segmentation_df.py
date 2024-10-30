@@ -235,8 +235,9 @@ def make_image_contours_df(mask_name: str,
                            mask_path: str,
                            og_img_path: str,
                            p_img_path: str or None = None,
-                           overlays_output_folder: str,
-                           contour_type: str
+                           # TODO: fix here
+                           # overlays_output_folder: str,
+                           # contour_type: str
                            ) -> DataFrame:
     """
     Given a path to a binary image,

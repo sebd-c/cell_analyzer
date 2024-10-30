@@ -1,6 +1,7 @@
 ###########################################################################################
 # imports
 from os.path import join
+from skimage.measure import label
 from cv2 import imread
 from cv2 import imwrite
 from cv2 import createCLAHE
@@ -16,28 +17,26 @@ from src.utils.aux_funcs import print_execution_parameters
 # module of aux functions related to img preprocessing
 
 
-def enhance_single_img(og_img_path: str,
-                       output_path: str,
-                       ) -> None:
+def unbinarize_single_img(og_img_path: str,
+                          output_path: str,
+                          ) -> None:
     """
     This function takes the path to a poor quality image,
     and saves a new image enhanced by CLAHE
     """
     img = imread(og_img_path, IMREAD_GRAYSCALE)
 
-    # create a CLAHE object (Arguments are optional).
-    clahe = createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    cl1 = clahe.apply(img)
+    labeled_img = label(img)
 
-    imwrite(output_path, cl1)
+    imwrite(output_path, labeled_img)
 
     return
 
 
-def enhance_dir_imgs(input_folder: str,
-                     output_folder: str,
-                     img_extension: str
-                     ) -> None:
+def unbinarize_dir_imgs(input_folder: str,
+                        output_folder: str,
+                        img_extension: str
+                        ) -> None:
     """
     This function takes an input folder containing all the
     imgs to be processed, and loops through each image processing it
@@ -63,8 +62,8 @@ def enhance_dir_imgs(input_folder: str,
                            img_file)
 
         # runnning img processing func
-        enhance_single_img(og_img_path=img_input_path,
-                           output_path=output_path)
+        unbinarize_single_img(og_img_path=img_input_path,
+                              output_path=output_path)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -140,9 +139,9 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    enhance_dir_imgs(input_folder=input_folder,
-                     output_folder=output_folder,
-                     img_extension=images_extension)
+    unbinarize_dir_imgs(input_folder=input_folder,
+                        output_folder=output_folder,
+                        img_extension=images_extension)
 
 
 ######################################################################

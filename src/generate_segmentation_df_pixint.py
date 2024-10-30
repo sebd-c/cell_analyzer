@@ -16,6 +16,7 @@ from cv2 import imread
 from cv2 import contourArea
 from cv2 import findContours
 from cv2 import split
+from cv2 import imwrite
 from cv2 import COLOR_BGR2RGB
 from cv2 import cvtColor
 from cv2 import CHAIN_APPROX_NONE
@@ -42,12 +43,14 @@ from src.utils.aux_funcs import get_contour_roundness
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
+from src.utils.aux_funcs import make_contour_label
+from src.utils.aux_funcs import save_img_outlayers
 
 print('all required libraries successfully imported.')  # noqa
 
 
 #####################################################################
-def get_parameters_df(contour,
+def get_parameters_df(contour: ndarray,
                       pixel_int: float,
                       mask_name: str,
                       flag: int,
@@ -70,7 +73,6 @@ def get_parameters_df(contour,
     :param phase_blue_list: list of pixel intensities of the B channel from the RGB (phase img)
     :return: single row df respective to the contour passed
     """
-
 
     # getting current contour area
     area = contourArea(contour)
@@ -108,7 +110,7 @@ def get_parameters_df(contour,
                         'eccentricity': eccentricity,
                         'roundness': roundness,
                         'ii': ii,
-                        'contour': [contour],
+                        # 'contour': [contour],
                         }
 
         # lastly, we define what pixel intensities are going to be added
@@ -146,10 +148,8 @@ def get_parameters_df(contour,
             contour_dict['grayscale_sum'] = sum(pixint_list)
             contour_dict['grayscale_int_density'] = contour_dict['grayscale_mean'] / area
 
-
     # assembling contour df, i.e, making a row
-    contour_df = DataFrame(contour_dict, index=[0]) # noqa
-
+    contour_df = DataFrame(contour_dict, index=[0])  # noqa
 
     # returns single row of dataframe
     return contour_df
@@ -159,11 +159,13 @@ def process_contour_phase(single_contour_img: ndarray,
                           mask_name: str,
                           pixint: float,
                           image: ndarray,
+                          og_phase: ndarray,
                           phase_red: ndarray,
                           phase_green: ndarray,
                           phase_blue: ndarray
                           ) -> DataFrame:
     """
+    :param og_phase:
     :param pixint:
     :param mask_name:
     :param single_contour_img:
@@ -194,7 +196,17 @@ def process_contour_phase(single_contour_img: ndarray,
                                           phase_red_list=phase_red_intensity,
                                           phase_green_list=phase_green_intensity,
                                           phase_blue_list=phase_blue_intensity
-                                         )
+                                          )
+    # put label
+    make_contour_label(contour_index=int(pixint),
+                       centroid_x=single_contour_df['cx_coords'],
+                       centroid_y=single_contour_df['cy_coords'],
+                       color=(0, 0, 255),
+                       thickness=2,
+                       img_to_label=og_phase,
+                       contour=contour,
+                       )
+
     # returns the contours and the list of intensities
     return single_contour_df
 
@@ -221,12 +233,23 @@ def process_contour_grayscale(single_contour_img: ndarray,
     # finding contour in image
     contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
 
-    single_contour_df = get_parameters_df(contour=contour,
+    single_contour_df = get_parameters_df(contour=contour[0],
                                           pixel_int=pixint,
                                           mask_name=mask_name,
                                           flag=0,
                                           pixint_list=og_intensity,
-                                         )
+                                          )
+
+    # put label
+    make_contour_label(contour_index=int(pixint),
+                       centroid_x=single_contour_df['cx_coords'],
+                       centroid_y=single_contour_df['cy_coords'],
+                       color=255,
+                       thickness=2,
+                       img_to_label=image,
+                       contour=contour[0],
+                       )
+
     # returns the contours and the list of intensities
     return single_contour_df
 
@@ -235,9 +258,8 @@ def process_contour_grayscale(single_contour_img: ndarray,
 def make_image_contours_df(mask_name: str,
                            mask_path: str,
                            og_img_path: str,
-                           p_img_path: str or None = None,
                            overlays_output_folder: str,
-                           contour_type: str
+                           p_img_path: str or None = None
                            ) -> DataFrame:
     """
     Given a path to a binary image,
@@ -245,16 +267,16 @@ def make_image_contours_df(mask_name: str,
     returns data frame containing
     contours desired infos.
     """
+    if p_img_path is not None:
+        # if staining channel is passed, read that image
+        phase_image_cv2 = imread(p_img_path,
+                                 -1)
 
-    # if staining channel is passed, read that image
-    phase_image_cv2 = imread(p_img_path,
-                             -1)
+        # convert it to the accurate colors
+        phase_image = cvtColor(phase_image_cv2, COLOR_BGR2RGB)
 
-    # convert it to the accurate colors
-    phase_image = cvtColor(phase_image_cv2, COLOR_BGR2RGB)
-
-    # separate channels
-    phase_red, phase_green, phase_blue = split(phase_image)
+        # separate channels
+        phase_red, phase_green, phase_blue = split(phase_image)
 
     # reading mask and image
     mask = imread(mask_path,
@@ -263,17 +285,15 @@ def make_image_contours_df(mask_name: str,
     image = imread(og_img_path,
                    -1)
 
-
     # separating contours before binarizing mask
-    max_intensity = mask.max() # noqa
+    max_intensity = mask.max()  # noqa
 
     # getting shape for new masks arrays
     shape = mask.shape
 
-    # empty list to hold contours
-    contours = []
-    # create dfs list holder
+    # create an empty list to hold the single contours df
     contours_df_list = []
+
     # loop not to join different contours
     for pixel_intensity in range(1, max_intensity + 1):
         # create a new blank img
@@ -288,53 +308,38 @@ def make_image_contours_df(mask_name: str,
         # means the analysis is being done in phase img,
         # and requires extraction of the rgb channels
         if p_img_path is not None:
-            contours_n_intensities = process_contour_phase(single_contour_img=single_contour_img,
-                                                           mask_name=mask_name,
-                                                           pixint=pixel_intensity,
-                                                           image=image,
-                                                           phase_red=phase_red,
-                                                           phase_green=phase_green,
-                                                           phase_blue=phase_blue
-                                                           )
+            contour_df = process_contour_phase(single_contour_img=single_contour_img,
+                                               mask_name=mask_name,
+                                               pixint=pixel_intensity,
+                                               image=image,
+                                               og_phase=phase_image,
+                                               phase_red=phase_red,
+                                               phase_green=phase_green,
+                                               phase_blue=phase_blue
+                                               )
 
-            # make specific dictionary depnding on the type of segmentation
-            intensity_dict = {'grayscale_int': contours_n_intensities[4],
-                              'phase_red_int': contours_n_intensities[1],
-                              'phase_green_int': contours_n_intensities[2],
-                              'phase_blue_int': contours_n_intensities[3],
-                              }
         # if not, simply extract the pixel intensity values from the og img,
         # and save it to put in the df
         else:
-            contours_n_intensities = process_contour_grayscale(max_intensity=max_intensity,
-                                                               shape=shape,
-                                                               mask=mask,
-                                                               image=image,
-                                                               )
+            contour_df = process_contour_grayscale(single_contour_img=single_contour_img,
+                                                   mask_name=mask_name,
+                                                   pixint=pixel_intensity,
+                                                   image=image
+                                                   )
 
-            # make specific dictionary depnding on the type of segmentation
-            intensity_dict = {'grayscale_int': contours_n_intensities[1],
-                              }
+        # appending current df to dfs list
+        contours_df_list.append(contour_df)
 
-        # putting contour in list
-        contours.append(contour[0])
-
-
-
-
-    # separate values from tuple
-    contours = contours_n_intensities[0]
-
-    # gets enumerate to have indexes
-    contours_enumerate = enumerate(contours, 1)
-
-    concat_contours_df = get_parameters_df(,
-                         # appending current df to dfs list
-                         contours_df_list.append(contour_df)
-
-    # concating contour df into bigger df
-    # a pandas dataframe
+    # concat the list of dfs into a single df
     concat_contours_df = concat(contours_df_list, ignore_index=True)
+
+    # save image with labels
+    overlays_output_path = join(overlays_output_folder, mask_name)
+    if p_img_path is not None:
+        imwrite(overlays_output_path, phase_image)
+    else:
+        imwrite(overlays_output_path, image)
+
     # returning contours df
     return concat_contours_df
 
@@ -344,7 +349,6 @@ def make_folder_contours_df(masks_input_folder: str,
                             masks_img_extension: str,
                             csv_output_folder: str,
                             overlays_output_folder: str,
-                            segmentation_type: str
                             ) -> None:
     """
     Given a path to a folder containing
@@ -383,11 +387,15 @@ def make_folder_contours_df(masks_input_folder: str,
 
         # analogous getting current og image input/output paths
         og_img_input_path = join(og_imgs_input_folder,
-                                 og_img_file)
+                                 og_img_file
+                                 )
 
         # get image contour df and respective overlayed imgs
-        image_df = make_image_contours_df(mask_name=mask_file, mask_path=mask_input_path, og_img_path=og_img_input_path,
-                                          overlays_output_folder=overlays_output_folder, contour_type=segmentation_type)
+        image_df = make_image_contours_df(mask_name=mask_file,
+                                          mask_path=mask_input_path,
+                                          og_img_path=og_img_input_path,
+                                          overlays_output_folder=overlays_output_folder
+                                          )
 
         # append curr img df to dir df
         dfs_list.append(image_df)
@@ -457,11 +465,11 @@ def get_args_dict() -> dict:
                         required=True,
                         help='defines path to output folder (overlays)')
 
-    # overlays output folder param
-    parser.add_argument('-st', '--segmentation_type',
-                        dest='segmentation_type',
-                        required=True,
-                        help='defines wich type of segmentation it is. "nuc" or "cyto"')
+    # # overlays output folder param
+    # parser.add_argument('-st', '--segmentation_type',
+    #                     dest='segmentation_type',
+    #                     required=True,
+    #                     help='defines wich type of segmentation it is. "nuc" or "cyto"')
 
     # creating arguments dictionary
     args_dict = vars(parser.parse_args())
@@ -494,8 +502,8 @@ def main():
     # getting overlays output path
     overlays_output_folder = args_dict['overlays_output_folder']
 
-    # getting type of segmentation
-    segmentation_type = args_dict['segmentation_type']
+    # # getting type of segmentation
+    # segmentation_type = args_dict['segmentation_type']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
@@ -509,7 +517,7 @@ def main():
                             masks_img_extension=images_extension,
                             csv_output_folder=csv_output_folder,
                             overlays_output_folder=overlays_output_folder,
-                            segmentation_type=segmentation_type)
+                            )
 
 
 ######################################################################
