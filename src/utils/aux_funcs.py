@@ -215,7 +215,7 @@ def get_area_box(contour: ndarray, contour_area: float) -> float:
     contour_min_rect_area = width * height
 
     # calculates area box by definition given in IPP6
-    contour_area_box = contour_area / contour_min_rect_area
+    contour_area_box = contour_min_rect_area / contour_area
 
     return contour_area_box
 
