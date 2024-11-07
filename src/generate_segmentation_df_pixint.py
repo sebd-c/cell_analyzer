@@ -188,7 +188,7 @@ def process_contour_phase(single_contour_img: ndarray,
     # finding contour in image
     contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
 
-    single_contour_df = get_parameters_df(contour=contour,
+    single_contour_df = get_parameters_df(contour=contour[0],
                                           pixel_int=pixint,
                                           mask_name=mask_name,
                                           flag=1,
@@ -197,14 +197,15 @@ def process_contour_phase(single_contour_img: ndarray,
                                           phase_green_list=phase_green_intensity,
                                           phase_blue_list=phase_blue_intensity
                                           )
+
     # put label
     make_contour_label(contour_index=int(pixint),
                        centroid_x=single_contour_df['cx_coords'],
                        centroid_y=single_contour_df['cy_coords'],
-                       color=(0, 0, 255),
+                       color=255,
                        thickness=2,
-                       img_to_label=og_phase,
-                       contour=contour,
+                       img_to_label=image,
+                       contour=contour[0],
                        )
 
     # returns the contours and the list of intensities
@@ -434,11 +435,16 @@ def get_args_dict() -> dict:
 
     # adding arguments to parser
 
-    # input folder param
+    # grayscale input folder param
     parser.add_argument('-i', '--images-folder',
                         dest='images_folder',
                         required=True,
                         help='defines path to folder containing original images')
+    # phase input folder param
+    parser.add_argument('-p', '--phase-images-folder',
+                        dest='phase_folder',
+                        required=False,
+                        help='defines path to folder containing phase images')
 
     # input masks folder param
     parser.add_argument('-m', '--masks-folder',
@@ -492,6 +498,9 @@ def main():
 
     # getting images folder
     images_folder = args_dict['images_folder']
+
+    # phase images folder
+    phase_folder = args_dict['phase_folder']
 
     # getting images extension
     images_extension = args_dict['images_extension']
