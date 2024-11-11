@@ -159,7 +159,6 @@ def process_contour_phase(single_contour_img: ndarray,
                           mask_name: str,
                           pixint: float,
                           image: ndarray,
-                          og_phase: ndarray,
                           phase_red: ndarray,
                           phase_green: ndarray,
                           phase_blue: ndarray
@@ -170,10 +169,10 @@ def process_contour_phase(single_contour_img: ndarray,
     :param mask_name:
     :param single_contour_img:
     :param image:
-    :param phase_red: 
-    :param phase_green: 
-    :param phase_blue: 
-    :return: 
+    :param phase_red:
+    :param phase_green:
+    :param phase_blue:
+    :return:
     """
 
     # getting pixel intensity for each channel
@@ -211,56 +210,12 @@ def process_contour_phase(single_contour_img: ndarray,
     # returns the contours and the list of intensities
     return single_contour_df
 
-
-def process_contour_grayscale(single_contour_img: ndarray,
-                              mask_name: str,
-                              pixint: float,
-                              image: ndarray
-                              ) -> DataFrame:
-    """
-    :param pixint:
-    :param mask_name:
-    :param single_contour_img:
-    :param image:
-    :return:
-    """
-
-    # getting pixel intensity for each channel
-    og_intensity = image[single_contour_img == 1]
-
-    # converting int type
-    single_contour_img = single_contour_img.astype(np_uint8)
-
-    # finding contour in image
-    contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
-
-    single_contour_df = get_parameters_df(contour=contour[0],
-                                          pixel_int=pixint,
-                                          mask_name=mask_name,
-                                          flag=0,
-                                          pixint_list=og_intensity,
-                                          )
-
-    # put label
-    make_contour_label(contour_index=int(pixint),
-                       centroid_x=single_contour_df['cx_coords'],
-                       centroid_y=single_contour_df['cy_coords'],
-                       color=255,
-                       thickness=2,
-                       img_to_label=image,
-                       contour=contour[0],
-                       )
-
-    # returns the contours and the list of intensities
-    return single_contour_df
-
-
 # module specific aux functions
 def make_image_contours_df(mask_name: str,
                            mask_path: str,
                            og_img_path: str,
-                           overlays_output_folder: str,
-                           p_img_path: str or None = None
+                           p_img_path: str,
+                           overlays_output_folder: str
                            ) -> DataFrame:
     """
     Given a path to a binary image,
@@ -268,6 +223,16 @@ def make_image_contours_df(mask_name: str,
     returns data frame containing
     contours desired infos.
     """
+
+    # read the rgb channel
+    phase_image_cv2 = imread(p_img_path,
+                             -1)
+
+    # convert it to the accurate colors
+    phase_image = cvtColor(phase_image_cv2, COLOR_BGR2RGB)
+
+    # separate channels
+    phase_red, phase_green, phase_blue = split(phase_image)
 
     # reading mask and image
     mask = imread(mask_path,
@@ -293,13 +258,18 @@ def make_image_contours_df(mask_name: str,
         # putting the contour inside
         single_contour_img[mask == pixel_intensity] = 1
 
-        # extract the pixel intensity values from the og img,
-        # and save it to put in the df
-        contour_df = process_contour_grayscale(single_contour_img=single_contour_img,
-                                               mask_name=mask_name,
-                                               pixint=pixel_intensity,
-                                               image=image
-                                               )
+        # choose which way the function should be continued
+        # if the parameter for phase was set,
+        # means the analysis is being done in phase img,
+        # and requires extraction of the rgb channels
+        contour_df = process_contour_phase(single_contour_img=single_contour_img,
+                                           mask_name=mask_name,
+                                           pixint=pixel_intensity,
+                                           image=image,
+                                           phase_red=phase_red,
+                                           phase_green=phase_green,
+                                           phase_blue=phase_blue
+                                           )
 
         # appending current df to dfs list
         contours_df_list.append(contour_df)
@@ -309,7 +279,8 @@ def make_image_contours_df(mask_name: str,
 
     # save image with labels
     overlays_output_path = join(overlays_output_folder, mask_name)
-    imwrite(overlays_output_path, image)
+
+    imwrite(overlays_output_path, phase_image)
 
     # returning contours df
     return concat_contours_df
@@ -317,13 +288,14 @@ def make_image_contours_df(mask_name: str,
 
 def make_folder_contours_df(masks_input_folder: str,
                             og_img_folder: str,
+                            phase_img_folder: str,
                             masks_img_extension: str,
                             csv_output_folder: str,
                             overlays_output_folder: str,
                             ) -> None:
     """
     Given a path to a folder containing
-    cytoplasms masks, generates a df
+    cytoplasm's masks, generates a df
     containing the wanted information,
     and saving the results
     in the output folder.
@@ -335,6 +307,10 @@ def make_folder_contours_df(masks_input_folder: str,
     # analogous to og imgs
     og_files = get_files_in_folder(path_to_folder=og_img_folder,
                                    extension=masks_img_extension)
+
+    # analogous to phase imgs
+    phase_files = get_files_in_folder(path_to_folder=phase_img_folder,
+                                      extension=masks_img_extension)
 
     masks_files_num = len(mask_files)
 
@@ -349,22 +325,30 @@ def make_folder_contours_df(masks_input_folder: str,
                                index=file_index,
                                total=masks_files_num)
 
+        # getting respective og img
+        og_img_file = og_files[file_index - 1]
+
+        # getting respective phase img
+        phase_file = phase_files[file_index - 1]
+
         # getting current image mask input/output paths
         mask_input_path = join(masks_input_folder,
                                mask_file)
-
-        # getting respective og img
-        og_img_file = og_files[file_index - 1]
 
         # analogous getting current og image input/output paths
         og_img_input_path = join(og_img_folder,
                                  og_img_file
                                  )
 
+        # analogous getting current og image input/output paths
+        phase_img_input_path = join(phase_img_folder,
+                                phase_file
+                                )
         # get image contour df and respective overlayed imgs
         image_df = make_image_contours_df(mask_name=mask_file,
                                           mask_path=mask_input_path,
                                           og_img_path=og_img_input_path,
+                                          p_img_path=phase_img_input_path,
                                           overlays_output_folder=overlays_output_folder
                                           )
 
@@ -410,6 +394,11 @@ def get_args_dict() -> dict:
                         dest='images_folder',
                         required=True,
                         help='defines path to folder containing original images')
+    # phase input folder param
+    parser.add_argument('-p', '--phase-images-folder',
+                        dest='phase_folder',
+                        required=True,
+                        help='defines path to folder containing phase images')
 
     # input masks folder param
     parser.add_argument('-m', '--masks-folder',
@@ -488,6 +477,7 @@ def main():
     # running function to get the segmentation df for a folder
     make_folder_contours_df(masks_input_folder=masks_folder,
                             og_img_folder=images_folder,
+                            phase_img_folder=phase_folder,
                             masks_img_extension=images_extension,
                             csv_output_folder=csv_output_folder,
                             overlays_output_folder=overlays_output_folder,
