@@ -117,26 +117,33 @@ def get_parameters_df(contour: ndarray,
         # if the function was called by the processing of a phase img
         if flag == 1:
             # getting pixel intensity values for RGB and adding them to the dict
+            contour_dict['grayscale_mean'] = mean(pixint_list)
+            contour_dict['grayscale_median'] = median(pixint_list)
+            contour_dict['grayscale_max'] = max(pixint_list)
+            contour_dict['grayscale_min'] = min(pixint_list)
+            contour_dict['grayscale_sum'] = sum(pixint_list)
+            contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
+
             contour_dict['red_mean'] = mean(phase_red_list)
             contour_dict['red_median'] = median(phase_red_list)
             contour_dict['red_max'] = max(phase_red_list)
             contour_dict['red_min'] = min(phase_red_list)
             contour_dict['red_sum'] = sum(phase_red_list)
-            contour_dict['red_int_density'] = contour_dict['red_mean'] / area
+            contour_dict['red_int_density'] = contour_dict['red_sum'] / area
 
             contour_dict['green_mean'] = mean(phase_green_list)
             contour_dict['green_median'] = median(phase_green_list)
             contour_dict['green_max'] = max(phase_green_list)
             contour_dict['green_min'] = min(phase_green_list)
             contour_dict['green_sum'] = sum(phase_green_list)
-            contour_dict['green_int_density'] = contour_dict['green_mean'] / area
+            contour_dict['green_int_density'] = contour_dict['green_sum'] / area
 
             contour_dict['blue_mean'] = mean(phase_blue_list)
             contour_dict['blue_median'] = median(phase_blue_list)
             contour_dict['blue_max'] = max(phase_blue_list)
             contour_dict['blue_min'] = min(phase_blue_list)
             contour_dict['blue_sum'] = sum(phase_blue_list)
-            contour_dict['blue_int_density'] = contour_dict['blue_mean'] / area
+            contour_dict['blue_int_density'] = contour_dict['blue_sum'] / area
 
         # if the function was called by the processing of a simple channel img
         #  simply calculate for that grayscale
@@ -146,7 +153,7 @@ def get_parameters_df(contour: ndarray,
             contour_dict['grayscale_max'] = max(pixint_list)
             contour_dict['grayscale_min'] = min(pixint_list)
             contour_dict['grayscale_sum'] = sum(pixint_list)
-            contour_dict['grayscale_int_density'] = contour_dict['grayscale_mean'] / area
+            contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
 
     # assembling contour df, i.e, making a row
     contour_df = DataFrame(contour_dict, index=[0])  # noqa
@@ -209,6 +216,7 @@ def process_contour_phase(single_contour_img: ndarray,
 
     # returns the contours and the list of intensities
     return single_contour_df
+
 
 # module specific aux functions
 def make_image_contours_df(mask_name: str,
@@ -280,7 +288,7 @@ def make_image_contours_df(mask_name: str,
     # save image with labels
     overlays_output_path = join(overlays_output_folder, mask_name)
 
-    imwrite(overlays_output_path, phase_image)
+    imwrite(overlays_output_path, image)
 
     # returning contours df
     return concat_contours_df
@@ -342,8 +350,8 @@ def make_folder_contours_df(masks_input_folder: str,
 
         # analogous getting current og image input/output paths
         phase_img_input_path = join(phase_img_folder,
-                                phase_file
-                                )
+                                    phase_file
+                                    )
         # get image contour df and respective overlayed imgs
         image_df = make_image_contours_df(mask_name=mask_file,
                                           mask_path=mask_input_path,

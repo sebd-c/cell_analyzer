@@ -1,10 +1,10 @@
-# fix model for df showing in terminal
-identities_matrix_df = pd.DataFrame(identities_matrix,
-                                            columns=seqs_names_list_ds_01,
-                                            index=seqs_names_list_ds_01)
-        with pd.option_context('display.max_rows', None, 'display.max_columns',
-                               None):  # more options can be specified also
-            print(identities_matrix_df)
+# # fix model for df showing in terminal
+# identities_matrix_df = pd.DataFrame(identities_matrix,
+#                                             columns=seqs_names_list_ds_01,
+#                                             index=seqs_names_list_ds_01)
+#         with pd.option_context('display.max_rows', None, 'display.max_columns',
+#                                None):  # more options can be specified also
+#             print(identities_matrix_df)
 ###########################################################################################
 # imports
 from seaborn import scatterplot
@@ -20,35 +20,6 @@ from src.utils.aux_funcs import print_execution_parameters
 # module of aux functions related to img preprocessing
 
 
-def merge_label_df(infos_df_path: str,
-                   labels_df_path: str,
-                  ) -> None:
-    """
-    This function takes the path to an unfiltered df,
-    and saves a new df after using a filter dictionary
-    to exclude the objects that were wrongfully segmented
-    """
-    # read dataframes
-    infos_df = read_csv(infos_df_path)
-
-    labels_df = read_csv(labels_df_path)
-
-    # now that we have both the complete df and the
-    # filter the df using a left outer join
-    labeled_df = infos_df.merge(labels_df,
-                                on=['image_name', 'contour_index'],
-                                how='left',
-                                indicator=True
-                                )
-    # followed by the exclusion of the rows that were not shared
-    labeled_df = labeled_df[labeled_df['_merge'] == 'both']
-
-    # exclude the newly created column for cleanness
-    labeled_df = labeled_df.drop(columns='_merge')
-
-    # returns the filtered df
-    return labeled_df
-
 def plot_cma(df: DataFrame
              ) -> None:
     scatterplot(data=df, x="ii", y="area", hue="xgal")
@@ -58,8 +29,17 @@ def plot_cma(df: DataFrame
     plt.show()
     plt.show()
     plt.close()
-    pass
 
+
+def plot_pixint_per_gt(df: DataFrame) -> None:
+
+    scatterplot(data=df, x="ii", y="area", hue="xgal")
+    plt.xlabel('Irregularity Index')
+    plt.ylabel('Area')
+    plt.grid(False)
+    plt.show()
+    plt.show()
+    plt.close()
 #####################################################################
 # argument parsing related functions
 
