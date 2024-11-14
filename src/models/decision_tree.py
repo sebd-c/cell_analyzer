@@ -14,6 +14,8 @@ from sklearn.tree import plot_tree
 from sklearn.model_selection import train_test_split
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import enter_to_continue
+
+
 ##########################################################################################
 # auxiliary functions
 
@@ -96,12 +98,12 @@ def run_dt_model_xgal(input_path: str,
 
     # getting feature importance
     feature_importance = DataFrame(clf_gini.feature_importances_,
-                                      index=feature_cols).sort_values(0, ascending=False)
+                                   index=feature_cols).sort_values(0, ascending=False)
 
     # saving metrics and feature dfs
     # create the path to save
     output_metrics = join(output_folder,
-                       'metrics_output.csv')
+                          'metrics_output.csv')
 
     output_featimp = join(output_folder,
                           'feat_importance_output.csv')
@@ -117,10 +119,11 @@ def run_dt_model_xgal(input_path: str,
 
     fig = plt.figure(figsize=(25, 20))
     _ = plot_tree(clf_gini,
-                       feature_names=feature_cols,
-                       class_names={0: 'Negative', 1: 'Positive'},
-                       filled=True,
-                       fontsize=12)
+                  feature_names=feature_cols,
+                  class_names={0: 'Negative', 1: 'Positive'},
+                  filled=True,
+                  fontsize=12)
+
     plt.show()
 
 
@@ -181,8 +184,9 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    run_dt_model_xgal()
-                   )
+    run_dt_model_xgal(input_path=input_path,
+                      output_folder=output_folder
+                      )
 
 
 ######################################################################
