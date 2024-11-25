@@ -11,36 +11,27 @@ print('initializing...')  # noqa
 ######################################################################
 # imports
 import numpy as np
-from cv2 import imread
-from cv2 import threshold
 from cv2 import morphologyEx
-from cv2 import THRESH_BINARY_INV
+from cv2 import GaussianBlur
+from cv2 import threshold
+from cv2 import dilate
+from cv2 import subtract
+from cv2 import watershed
+from cv2 import connectedComponents
+from cv2 import distanceTransform
 from cv2 import THRESH_BINARY
-from cv2 import MORPH_OPEN
-from cv2 import MORPH_CLOSE
-from cv2 import ADAPTIVE_THRESH_GAUSSIAN_C
-from cv2 import ADAPTIVE_THRESH_MEAN_C
+from cv2 import DIST_L2
 from cv2 import THRESH_OTSU
-from cv2 import adaptiveThreshold
+from cv2 import MORPH_OPEN
 from matplotlib import pyplot as plt
 
 print('importing required libraries...')  # noqa
-from numpy import stack
 from os.path import join
 from numpy import ndarray
-from cv2 import contourArea
-from cv2 import GaussianBlur
-from cv2 import findContours
-from cv2 import drawContours
-from cv2 import RETR_EXTERNAL
-from cv2 import BORDER_DEFAULT
-from cv2 import CHAIN_APPROX_NONE
-from cv2 import bilateralFilter
 from argparse import ArgumentParser
 from src.utils.aux_funcs_a import save_stack
 from src.utils.aux_funcs_a import load_stack
 from src.utils.global_vars import SLICES_NUM
-from src.utils.aux_funcs_a import get_blank_image
 from src.utils.aux_funcs_a import convert_to_8bit
 from src.utils.aux_funcs_a import get_dimensions_num
 from src.classes.ProgressTracker import ProgressTracker
@@ -262,10 +253,10 @@ class ModuleProgressTracker(ProgressTracker):
 # defining auxiliary functions
 
 
-def binarize_img(image: ndarray,
-                 block_size: int,
-                 subtracted_const: int,
-                 ) -> ndarray:
+def apply_watershed(image: ndarray,
+                    block_size: int,
+                    subtracted_const: int,
+                    ) -> ndarray:
     """
     Given a 2d array, returns masked
     image, based on given parameters.
@@ -274,27 +265,51 @@ def binarize_img(image: ndarray,
     # blurring img
     blur = GaussianBlur(image, (5, 5), 0)
 
-    # # adaptative threshold
-    # img = adaptiveThreshold(blur,
-    #                         255,
-    #                         ADAPTIVE_THRESH_GAUSSIAN_C,
-    #                         THRESH_BINARY,
-    #                         blockSize=block_size,
-    #                         C=subtracted_const
-    #                         )
+    # adaptative threshold
+    # adap_img = adaptiveThreshold(blur,
+    #                              255,
+    #                              ADAPTIVE_THRESH_GAUSSIAN_C,
+    #                              THRESH_BINARY,
+    #                              blockSize=block_size,
+    #                              C=subtracted_const
+    #                              )
 
     # apply Otsu's binarization
-    ret, img = threshold(blur, 0, 255, THRESH_BINARY+THRESH_OTSU)
+    ret, th_img = threshold(blur, 0, 255, THRESH_BINARY + THRESH_OTSU)
 
-    kernel = np.ones((9, 9), np.uint8)
+    # noise removal
+    kernel = np.ones((3, 3), np.uint8)
+    opening = morphologyEx(th_img, MORPH_OPEN, kernel, iterations=2)
 
-    # opening = morphologyEx(img, MORPH_OPEN, kernel)
+    # sure background area
+    sure_bg = dilate(opening, kernel, iterations=3)
 
-    closing = morphologyEx(img, MORPH_CLOSE, kernel)
+    # Finding sure foreground area
+    dist_transform = distanceTransform(opening, DIST_L2, 5)
+    ret, sure_fg = threshold(dist_transform, 0.7 * dist_transform.max(), 255, 0)
+
+    # Finding unknown region
+    sure_fg = np.uint8(sure_fg)
+    unknown = subtract(sure_bg, sure_fg)
+
+    # Marker labelling
+    ret, markers = connectedComponents(sure_fg)
+
+    # Add one to all labels so that sure background is not 0, but 1
+    markers = markers + 1
+
+    # Now, mark the region of unknown with zero
+    markers[unknown == 255] = 0
+
+    markers = watershed(image.astype(np.uint8), markers)
+    # image[markers == -1] = [255, 0, 0]
+
+    print("threshold was:")
+    print(ret)
 
     # converting image to 8bit
     # image = convert_to_8bit(image=adap_img)
-    image = convert_to_8bit(image=closing)
+    image = convert_to_8bit(image=markers)
 
     return image
 
@@ -316,10 +331,10 @@ def generate_binary_mask(input_path: str,
     image = load_stack(input_path)
 
     # getting image mask
-    image = binarize_img(image=image,
-                         block_size=block_size,
-                         subtracted_const=subtracted_const
-                         )
+    image = apply_watershed(image=image,
+                            block_size=block_size,
+                            subtracted_const=subtracted_const
+                            )
 
     # converting image to 8bit
     image_mask = convert_to_8bit(image=image)

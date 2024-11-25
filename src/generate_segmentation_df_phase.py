@@ -110,7 +110,7 @@ def get_parameters_df(contour: ndarray,
                         'eccentricity': eccentricity,
                         'roundness': roundness,
                         'ii': ii,
-                        # 'contour': [contour],
+                        'contour': [contour],
                         }
 
         # lastly, we define what pixel intensities are going to be added
