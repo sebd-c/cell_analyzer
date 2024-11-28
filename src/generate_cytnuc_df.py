@@ -12,6 +12,7 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
+from ast import literal_eval
 from cv2 import imread
 from cv2 import contourArea
 from cv2 import findContours
@@ -20,6 +21,7 @@ from cv2 import imwrite
 from cv2 import pointPolygonTest
 from cv2 import putText
 from cv2 import LINE_8
+from cv2 import UMat
 from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from cv2 import FONT_HERSHEY_COMPLEX
@@ -29,6 +31,7 @@ from pandas import DataFrame
 from pandas import read_csv
 from os.path import join
 from numpy import max
+from numpy import array
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
 from src.utils.aux_funcs import get_area_box
@@ -59,18 +62,34 @@ def link_cytnuc(cyt_df: DataFrame,
     # make a list as placeholder while making new linked df
     linked_dfs_list = []
 
+    # change image names so they match
+    cyt_df['image_name'] = cyt_df['image_name'].replace('green', '', regex=True)
+    nuc_df['image_name'] = nuc_df['image_name'].replace('red', '', regex=True)
+
     # loop of nucleus through the cytoplasm df
     for nucleus_index, nuc_row in nuc_df.iterrows():
+
         # conditional to loop only in the cytoplasms
         # that have matching img name as the nucleus
-        cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_df['image_name']]
+        cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_row['image_name']]
 
         for cyto_index, cyto_row in cyt_df_img.iterrows():
             # remember to put the contour into the df
+            # when saved in a csv, the contour turns into string
+            str_unextracted_cyto = cyto_row['contour']
+
             # we adapted it with a surplus of brackets
             # before proceeding, you need to remove that surplus of brackets
-            unextracted_cyto = cyto_row['contour']
-            extracted_cyto = unextracted_cyto[0]
+            # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
+            front = str_unextracted_cyto.find('[')
+            str_unextracted_cyto = str_unextracted_cyto[:front] + str_unextracted_cyto[front + 1:]
+            rear = str_unextracted_cyto.rfind(']')
+            str_unextracted_cyto = str_unextracted_cyto[:rear] + str_unextracted_cyto[rear + 1:]
+
+            # after having adapt the string to array, we can proceed
+            unextracted_cyto = array(str_unextracted_cyto)
+            extracted_cyto = UMat(unextracted_cyto)
+            # extracted_cyto = unextracted_cyto[0]
 
             # now use this cv2 function to
             # test if a point is inside an object
@@ -79,7 +98,6 @@ def link_cytnuc(cyt_df: DataFrame,
                                 # measureDist 0 or 1
                                 (nuc_row['cx_coords'], nuc_row['cy_coords']),
                                 measureDist=False) > -1:
-
                 # if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
                 # if the nucleus is nested in the contour,
 
@@ -193,7 +211,7 @@ def get_args_dict() -> dict:
 
     # input folder param
     parser.add_argument('-nf', '--nuc_images_folder',
-                        dest='cyto_images_folder',
+                        dest='nuc_images_folder',
                         required=True,
                         help='defines path to folder containing overlayed nuclei images')
 
@@ -223,8 +241,8 @@ def get_args_dict() -> dict:
                         help='defines path to output folder (overlays)')
 
     # overlays output folder param
-    parser.add_argument('-oo', '--overlays_output_folder',
-                        dest='overlays_output_folder',
+    parser.add_argument('-co', '--csv-output-folder',
+                        dest='csv_output_folder',
                         required=True,
                         help='defines path to output folder (overlays)')
 
@@ -244,11 +262,17 @@ def main():
     # getting args dict
     args_dict = get_args_dict()
 
-    # getting masks folder
-    masks_folder = args_dict['masks_folder']
+    # getting cytoplasm overlayed images
+    cyto_images_folder = args_dict['cyto_images_folder']
 
-    # getting images folder
-    images_folder = args_dict['images_folder']
+    # getting nuclei overlayed images
+    nuc_images_folder = args_dict['nuc_images_folder']
+
+    # getting cytoplasm csv
+    cyto_input_csv = args_dict['cyto_input_csv']
+
+    # getting nuclei csv
+    nuc_input_csv = args_dict['nuc_input_csv']
 
     # getting images extension
     images_extension = args_dict['images_extension']
@@ -265,12 +289,15 @@ def main():
     # waiting for user input
     enter_to_continue()
 
-    # running function to get the segmentation df for a folder
-    make_folder_contours_df(masks_input_folder=masks_folder,
-                            og_imgs_input_folder=images_folder,
-                            masks_img_extension=images_extension,
-                            csv_output_folder=csv_output_folder,
-                            overlays_output_folder=overlays_output_folder)
+    # runnning join
+    make_cytnuc_output(cyt_csv_input_path=cyto_input_csv,
+                       nuc_csv_input_path=nuc_input_csv,
+                       nuc_overlayed_input_folder=nuc_images_folder,
+                       cyto_overlayed_input_folder=cyto_images_folder,
+                       img_extension=images_extension,
+                       csv_output_folder=csv_output_folder,
+                       joined_overlays_output_folder=overlays_output_folder,
+                       )
 
 
 ######################################################################

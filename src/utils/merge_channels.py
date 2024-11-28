@@ -13,6 +13,7 @@ print('importing required libraries...')  # noqa
 from cv2 import imread
 from cv2 import imwrite
 from cv2 import addWeighted
+from cv2 import IMREAD_GRAYSCALE
 from os.path import join
 from numpy import add as np_add
 from argparse import ArgumentParser
@@ -85,11 +86,11 @@ def merge_single_image(nuc_path: str,
     """
 
     # reading red/green images
-    nucleus = imread(nuc_path, -1)
-    cytoplasm = imread(cyto_path, -1)
+    nucleus = imread(nuc_path, IMREAD_GRAYSCALE)
+    cytoplasm = imread(cyto_path, IMREAD_GRAYSCALE)
 
     # add(or blend) the images
-    merged_img = addWeighted(nucleus, 1, cytoplasm, 1, 0)
+    merged_img = addWeighted(nucleus, 0.5, cytoplasm, 0.5, 0)
 
     # saving merged image
     imwrite(output_path,
@@ -124,8 +125,6 @@ def merge_multiple_images(nuclei_folder: str,
     nuclei_images = get_files_in_folder(path_to_folder=nuclei_folder,
                                         extension=img_extension)
 
-    cyto_images = get_files_in_folder(path_to_folder=cyto_folder,
-                                      extension=img_extension)
     # getting images total
     images_num = len(nuclei_images)
 
@@ -133,22 +132,30 @@ def merge_multiple_images(nuclei_folder: str,
     current_image_index = 1
 
     # iterating over images
-    for image_name in nuclei_images:
+    for nuclei_image_name in nuclei_images:
         # printing execution message
         progress_base_string = 'merging image #INDEX# of #TOTAL#'
         print_progress_message(base_string=progress_base_string,
                                index=current_image_index,
                                total=images_num)
 
-        # getting current image input paths
+        # getting current nuclei image input paths
         nucleus_path = join(nuclei_folder,
-                            image_name)
+                            nuclei_image_name)
+
+        # make conversion for cytoplasm path
+        cyt_image_name = nuclei_image_name.replace('red', 'green')
+
+        # getting current cytoplasm image input paths
         cyto_path = join(cyto_folder,
-                         image_name)
+                         cyt_image_name)
+
+        # make conversion for joined channels path
+        joined_image_name = nuclei_image_name.replace('red', 'joined')
 
         # getting current image save path
         save_path = join(output_folder,
-                         image_name)
+                         joined_image_name)
 
         # running merge_single_image function
         merge_single_image(nuc_path=nucleus_path,
@@ -185,6 +192,8 @@ def main():
     # getting output images folder param
     output_folder = args_dict['output_folder']
 
+    # TODO: adicionar param de img extension
+
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
 
@@ -192,9 +201,10 @@ def main():
     enter_to_continue()
 
     # running merge_channels function
-    merge_channels(output_folder=output_folder,
-                   red_folder=red_folder,
-                   green_folder=green_folder)
+    merge_multiple_images(output_folder=output_folder,
+                          nuclei_folder=red_folder,
+                          cyto_folder=green_folder,
+                          img_extension='.tif')
 
 
 ######################################################################
