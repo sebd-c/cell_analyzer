@@ -49,6 +49,40 @@ print('all required libraries successfully imported.')  # noqa
 #####################################################################
 # module specific aux functions
 
+def string_to_contours_array(input_string: str) -> np.ndarray:
+    """
+    Converts a formatted string representing cv2.findContours output into a numpy array.
+
+    Args:
+        input_string (str): The input string containing points in the format:
+                           "[[[x1 y1]] [[x2 y2]] ... [[xn yn]]]".
+
+    Returns:
+        np.ndarray: A numpy array of shape (n, 2) representing contour points.
+    """
+    try:
+        # Clean up the input string to remove unwanted characters
+        clean_string = input_string.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()
+
+        # Replace multiple spaces with a single space
+        clean_string = ' '.join(clean_string.split())
+
+        # Remove the outermost brackets and split into individual points
+        clean_string = clean_string.strip('[]')
+        points = clean_string.split('] [')
+
+        # Parse each point into a list of integers
+        contour_array = []
+        for point in points:
+            # Strip any leftover brackets and split into coordinates
+            coords = point.replace('[', '').replace(']', '').split()
+            contour_array.append([int(coord) for coord in coords])
+
+        return np.array(contour_array)
+    except Exception as e:
+        raise ValueError(f"Failed to parse input string into a numpy array: {e}")
+
+
 def link_cytnuc(cyt_df: DataFrame,
                 nuc_df: DataFrame,
                 output_path: str) -> None:
@@ -77,23 +111,35 @@ def link_cytnuc(cyt_df: DataFrame,
             # remember to put the contour into the df
             # when saved in a csv, the contour turns into string
             str_unextracted_cyto = cyto_row['contour']
+            print(cyto_row)
+            print(str_unextracted_cyto)
+            # print(str_unextracted_cyto)
+            # print(type(str_unextracted_cyto))
 
-            # we adapted it with a surplus of brackets
-            # before proceeding, you need to remove that surplus of brackets
-            # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
-            front = str_unextracted_cyto.find('[')
-            str_unextracted_cyto = str_unextracted_cyto[:front] + str_unextracted_cyto[front + 1:]
-            rear = str_unextracted_cyto.rfind(']')
-            str_unextracted_cyto = str_unextracted_cyto[:rear] + str_unextracted_cyto[rear + 1:]
-
-            # after having adapt the string to array, we can proceed
-            unextracted_cyto = array(str_unextracted_cyto)
-            extracted_cyto = UMat(unextracted_cyto)
+            str_unextracted_cyto = string_to_contours_array(input_string=str_unextracted_cyto)
+            # print(str_unextracted_cyto)
+            # print(type(str_unextracted_cyto))
+            # exit()
+            #
+            # # we adapted it with a surplus of brackets
+            # # before proceeding, you need to remove that surplus of brackets
+            # # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
+            # front = str_unextracted_cyto.find('[')
+            # str_unextracted_cyto = str_unextracted_cyto[:front] + str_unextracted_cyto[front + 1:]
+            # rear = str_unextracted_cyto.rfind(']')
+            # str_unextracted_cyto = str_unextracted_cyto[:rear] + str_unextracted_cyto[rear + 1:]
+            #
+            # # after having adapt the string to array, we can proceed
+            # unextracted_cyto = array(str_unextracted_cyto)
+            # print(unextracted_cyto)
+            # print(type(unextracted_cyto))
+            # exit()
+            # extracted_cyto = UMat(unextracted_cyto)
             # extracted_cyto = unextracted_cyto[0]
 
             # now use this cv2 function to
             # test if a point is inside an object
-            if pointPolygonTest(extracted_cyto,
+            if pointPolygonTest(str_unextracted_cyto,
                                 # if it is, it'll be a match parent cytoplasm
                                 # measureDist 0 or 1
                                 (nuc_row['cx_coords'], nuc_row['cy_coords']),
@@ -183,9 +229,6 @@ def make_cytnuc_output(cyt_csv_input_path: str,
     link_cytnuc(cyt_df=cyto_df,
                 nuc_df=nuc_df,
                 output_path=output_path)
-
-    return
-
 
 #####################################################################
 # argument parsing related functions
@@ -287,7 +330,7 @@ def main():
     print_execution_parameters(params_dict=args_dict)
 
     # waiting for user input
-    enter_to_continue()
+    # enter_to_continue()
 
     # runnning join
     make_cytnuc_output(cyt_csv_input_path=cyto_input_csv,
