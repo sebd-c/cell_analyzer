@@ -70,7 +70,7 @@ def get_args_dict() -> dict:
     parser.add_argument('-i', '--input-folder',
                         dest='input_folder',
                         required=True,
-                        help='defines path to folder containing fluorescence images (3d images OR 2d projections')
+                        help='defines path to folder containing fluorescence images')
 
     # images extension param
     parser.add_argument('-x', '--images-extension',
@@ -286,24 +286,17 @@ def binarize_img(image: ndarray,
     # apply Otsu's binarization
     ret, img = threshold(blur, 0, 255, THRESH_BINARY+THRESH_OTSU)
 
-    kernel = np.ones((9, 9), np.uint8)
-
-    # opening = morphologyEx(img, MORPH_OPEN, kernel)
-
-    closing = morphologyEx(img, MORPH_CLOSE, kernel)
-
     # converting image to 8bit
-    # image = convert_to_8bit(image=adap_img)
-    image = convert_to_8bit(image=closing)
+    img = convert_to_8bit(image=img)
 
-    return image
+    return img
 
 
 def generate_binary_mask(input_path: str,
                          block_size: int,
                          subtracted_const: int,
                          output_path: str,
-                         progress_tracker: ModuleProgressTracker
+                         #progress_tracker: ModuleProgressTracker
                          ) -> None:
     """
     Given a path to an image, a pixel intensity

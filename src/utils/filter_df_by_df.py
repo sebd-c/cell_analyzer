@@ -48,44 +48,55 @@ def merge_label_df(infos_df_path: str,
     # exclude the newly created column for cleanness
     labeled_df = labeled_df.drop(columns='_merge')
 
-    labeled_df['classes_debs'] = None
-    labeled_df['classes_edu'] = None
+    labeled_df['cons_xgal'] = None
+    labeled_df['cons_sstatus'] = None
+    labeled_df['labeled_class'] = None
 
-    # label classes defined by
-    # if not xgal and not senescent like -> normal/growing cell = 0
-    # if xgal and not senescent like -> quiescent = 1
-    # if not xgal and senescent like -> blocked lisossomal senescence = 2
-    # if xgal and senescent like -> full senescent phenotype = 3
-    # make consensus columns
-    # for each row
+    # xgal_e	s_status_e	xgal_d	s_status_d	xgal_h	s_status_h
     for row_index, row in labeled_df.iterrows():
-        # check the xgal and senescent status
-
-        if row['xgal_d'] == 0 and row['s_status_d'] == 0:
+        print(row['xgal_d'])
+        print(row['xgal_e'])
+        print(row['xgal_h'])
+        print(row['xgal_d'] + row['xgal_e'] + row['xgal_h'])
+        # get consensus xgal
+        if row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 0 or 1:
+            # one or less annotator marked an object as xgal negative
+            labeled_df.loc[row_index, 'cons_xgal'] = 0
+            # labeled_df.at[row_index, 'cons_xgal'] = 0
+            print(row['cons_xgal'])
+        elif row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 2 or 3:
+            # two or more annotators marked an object as xgal positive
+            labeled_df.loc[row_index, 'cons_xgal'] = 1
+            print(row['cons_xgal'])
+        exit()
+        # get consensus senescent status
+        if row['s_status_d'] + row['s_status_e'] + row['s_status_h'] == 0 or 1:
+            # one or less annotator marked an object as not senescent like
+            labeled_df.at[row_index, 'cons_sstatus'] = 0
+        elif row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 2 or 3:
+            # two or more annotators marked an object  senescent like
+            labeled_df.at[row_index, 'cons_sstatus'] = 1
+        
+        # after obtaining the consensus features, we further obtain the stablished classes 
+        # label classes defined by
+        # if not xgal and not senescent like -> normal/growing cell = 0
+        # if xgal and not senescent like -> quiescent = 1
+        # if not xgal and senescent like -> blocked lisossomal senescence = 2
+        # if xgal and senescent like -> full senescent phenotype = 3
+        # make consensus columns
+        # for each row
+        if row['cons_xgal'] == 0 and row['cons_sstatus'] == 0:
             # condition attributed to growing tumor cells
-            labeled_df.at[row_index, 'classes_debs'] = 0
-        elif row['xgal_d'] == 1 and row['s_status_d'] == 0:
+            labeled_df.at[row_index, 'label'] = 0
+        elif row['cons_xgal'] == 1 and row['cons_sstatus'] == 0:
             # condition attributed to quiescent cells
-            labeled_df.at[row_index, 'classes_debs'] = 1
-        elif row['xgal_d'] == 0 and row['s_status_d'] == 1:
+            labeled_df.at[row_index, 'label'] = 1
+        elif row['cons_xgal'] == 0 and row['cons_sstatus'] == 1:
             # condition attributed to senescent like cells wo xgal
-            labeled_df.at[row_index, 'classes_debs'] = 2
-        elif row['xgal_d'] == 1 and row['s_status_d'] == 1:
+            labeled_df.at[row_index, 'label'] = 2
+        elif row['cons_xgal'] == 1 and row['cons_sstatus'] == 1:
             # condition attributed to full senescent phenotype cells
-            labeled_df.at[row_index, 'classes_debs'] = 3
-
-        if row['xgal_e'] == 0 and row['s_status_e'] == 0:
-            # condition attributed to growing tumor cells
-            labeled_df.at[row_index, 'classes_edu'] = 0
-        elif row['xgal_e'] == 1 and row['s_status_e'] == 0:
-            # condition attributed to quiescent cells
-            labeled_df.at[row_index, 'classes_edu'] = 1
-        elif row['xgal_e'] == 0 and row['s_status_e'] == 1:
-            # condition attributed to senescent like cells wo xgal
-            labeled_df.at[row_index, 'classes_edu'] = 2
-        elif row['xgal_e'] == 1 and row['s_status_e'] == 1:
-            # condition attributed to full senescent phenotype cells
-            labeled_df.at[row_index, 'classes_edu'] = 3
+            labeled_df.at[row_index, 'label'] = 3
 
     # create the path to save the output path
     output_path = join(output_folder,
