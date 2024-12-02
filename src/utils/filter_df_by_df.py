@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from pandas import DataFrame
 from os.path import join
 from pandas import read_csv
+from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_execution_parameters
@@ -31,9 +32,9 @@ def merge_label_df(infos_df_path: str,
     to exclude the objects that were wrongfully segmented
     """
     # read dataframes
-    infos_df = read_csv(infos_df_path)
+    infos_df = read_pickle(infos_df_path)
 
-    labels_df = read_csv(labels_df_path)
+    labels_df = read_pickle(labels_df_path)
 
     # now that we have both the complete df and the
     # filter the df using a left outer join
@@ -48,59 +49,43 @@ def merge_label_df(infos_df_path: str,
     # exclude the newly created column for cleanness
     labeled_df = labeled_df.drop(columns='_merge')
 
-    labeled_df['cons_xgal'] = None
-    labeled_df['cons_sstatus'] = None
-    labeled_df['labeled_class'] = None
+    # sum all rows of xgal columns ang asigns it to a pre-filtered colum
+    labeled_df['cons_xgal'] = labeled_df['xgal_d'] + labeled_df['xgal_e'] + labeled_df['xgal_h']
 
-    # xgal_e	s_status_e	xgal_d	s_status_d	xgal_h	s_status_h
-    for row_index, row in labeled_df.iterrows():
-        print(row['xgal_d'])
-        print(row['xgal_e'])
-        print(row['xgal_h'])
-        print(row['xgal_d'] + row['xgal_e'] + row['xgal_h'])
-        # get consensus xgal
-        if row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 0 or 1:
-            # one or less annotator marked an object as xgal negative
-            labeled_df.loc[row_index, 'cons_xgal'] = 0
-            # labeled_df.at[row_index, 'cons_xgal'] = 0
-            print(row['cons_xgal'])
-        elif row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 2 or 3:
-            # two or more annotators marked an object as xgal positive
-            labeled_df.loc[row_index, 'cons_xgal'] = 1
-            print(row['cons_xgal'])
-        exit()
-        # get consensus senescent status
-        if row['s_status_d'] + row['s_status_e'] + row['s_status_h'] == 0 or 1:
-            # one or less annotator marked an object as not senescent like
-            labeled_df.at[row_index, 'cons_sstatus'] = 0
-        elif row['xgal_d'] + row['xgal_e'] + row['xgal_h'] == 2 or 3:
-            # two or more annotators marked an object  senescent like
-            labeled_df.at[row_index, 'cons_sstatus'] = 1
+    # make negative label
+    labeled_df.loc[labeled_df['cons_xgal'] < 2, 'cons_xgal'] = 0
+
+    # make positive label
+    labeled_df.loc[labeled_df['cons_xgal'] > 1, 'cons_xgal'] = 1
+
+    # repeat for status
+    # sum all rows of xgal columns ang asigns it to a pre-filtered colum
+    labeled_df['cons_sstatus'] = labeled_df['s_status_h'] + labeled_df['s_status_e'] + labeled_df['s_status_h']
+
+    # make negative label
+    labeled_df.loc[labeled_df['cons_sstatus'] < 2, 'cons_sstatus'] = 0
+
+    # make positive label
+    labeled_df.loc[labeled_df['cons_sstatus'] > 1, 'cons_sstatus'] = 1
+
         
-        # after obtaining the consensus features, we further obtain the stablished classes 
-        # label classes defined by
-        # if not xgal and not senescent like -> normal/growing cell = 0
-        # if xgal and not senescent like -> quiescent = 1
-        # if not xgal and senescent like -> blocked lisossomal senescence = 2
-        # if xgal and senescent like -> full senescent phenotype = 3
-        # make consensus columns
-        # for each row
-        if row['cons_xgal'] == 0 and row['cons_sstatus'] == 0:
-            # condition attributed to growing tumor cells
-            labeled_df.at[row_index, 'label'] = 0
-        elif row['cons_xgal'] == 1 and row['cons_sstatus'] == 0:
-            # condition attributed to quiescent cells
-            labeled_df.at[row_index, 'label'] = 1
-        elif row['cons_xgal'] == 0 and row['cons_sstatus'] == 1:
-            # condition attributed to senescent like cells wo xgal
-            labeled_df.at[row_index, 'label'] = 2
-        elif row['cons_xgal'] == 1 and row['cons_sstatus'] == 1:
-            # condition attributed to full senescent phenotype cells
-            labeled_df.at[row_index, 'label'] = 3
+    # after obtaining the consensus features, we further obtain the stablished classes
+    # label classes defined by
+    # if not xgal and not senescent like -> normal/growing cell (0, 0) = 0
+    # if xgal and not senescent like -> quiescent (1, 0) = 1
+    # if xgal and senescent like -> full senescent phenotype (1, 1) = 2
+    # if not xgal and senescent like -> blocked lisossomal senescence (0, 1) = 3
+
+    # first sum up the two consensus columns
+    labeled_df['label'] = labeled_df['cons_xgal'] + labeled_df['cons_sstatus']
+
+    # then transform the result into a label
+    # we'll be using most of the sum's results, only changing one of the onesies
+    labeled_df.loc[(labeled_df['label'] == 1) & (labeled_df['status'] == 1), 'label'] = 3
 
     # create the path to save the output path
     output_path = join(output_folder,
-                       'labeled_contours.csv')
+                       'labeled_contours.pickle')
 
     # saving df
     labeled_df.to_csv(output_path, index=False)

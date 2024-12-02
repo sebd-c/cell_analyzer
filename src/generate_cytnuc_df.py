@@ -28,7 +28,7 @@ from cv2 import FONT_HERSHEY_COMPLEX
 from numpy import uint8 as np_uint8
 from pandas import concat
 from pandas import DataFrame
-from pandas import read_csv
+from pandas import read_pickle
 from os.path import join
 from numpy import max
 from numpy import array
@@ -189,7 +189,7 @@ def link_cytnuc(cyt_df: DataFrame,
     concat_linked_df = concat(linked_dfs_list, ignore_index=True)
 
     # saving new df
-    concat_linked_df.to_csv(output_path, index=False)
+    concat_linked_df.to_pickle(output_path, index=False)
 
     return concat_linked_df
 
@@ -217,13 +217,13 @@ def make_cytnuc_output(cyt_csv_input_path: str,
                           img_extension=img_extension)
 
     # read the .csv tables of both making them into a DataFrame object
-    cyto_df = read_csv(cyt_csv_input_path)
+    cyto_df = read_pickle(cyt_csv_input_path)
 
-    nuc_df = read_csv(nuc_csv_input_path)
+    nuc_df = read_pickle(nuc_csv_input_path)
 
     # create the path to save the output path
     output_path = join(csv_output_folder,
-                       'contours_cytnuc.csv')
+                       'contours_cytnuc.pickle')
 
     # linking the dfs
     link_cytnuc(cyt_df=cyto_df,

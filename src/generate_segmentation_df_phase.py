@@ -369,10 +369,10 @@ def make_folder_contours_df(masks_input_folder: str,
 
     # create the path to save the output path
     output_path = join(csv_output_folder,
-                       'contours_df.csv')
+                       'contours_df.pickle')
 
     # saving df
-    contour_df.to_csv(output_path, index=False)
+    contour_df.to_pickle(output_path, index=False)
 
     # printing execution message
     print(f'output saved to {csv_output_folder}')

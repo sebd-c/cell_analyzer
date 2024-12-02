@@ -6,6 +6,7 @@ from pandas import merge
 from pandas import concat
 from yaml import safe_load
 from pandas import read_csv
+from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_files_in_folder
@@ -66,13 +67,13 @@ def filter_data(tto_input_path: str,
     """
 
     # reading treatment df
-    tmz_df = read_csv(tto_input_path)
+    tmz_df = read_pickle(tto_input_path)
 
     # adding treatment col
     tmz_df['tto'] = 'tmz'
 
     # reading control df
-    ctr_df = read_csv(ctr_input_path)
+    ctr_df = read_pickle(ctr_input_path)
 
     # adding treatment col
     ctr_df['tto'] = 'ctr'
@@ -89,10 +90,10 @@ def filter_data(tto_input_path: str,
 
     # create the path to save the output path
     output_path = join(output_folder,
-                       'filtered_df.csv')
+                       'filtered_df.pickle')
 
     # saving df
-    concat_df.to_csv(output_path, index=False)
+    concat_df.to_pickle(output_path, index=False)
 
     # printing execution message
     print(f'output saved to {output_folder}')
