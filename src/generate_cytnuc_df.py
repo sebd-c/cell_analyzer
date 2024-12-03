@@ -12,34 +12,11 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
-from ast import literal_eval
-from cv2 import imread
-from cv2 import contourArea
-from cv2 import findContours
-from cv2 import drawContours
-from cv2 import imwrite
 from cv2 import pointPolygonTest
-from cv2 import putText
-from cv2 import LINE_8
-from cv2 import UMat
-from cv2 import CHAIN_APPROX_NONE
-from cv2 import RETR_EXTERNAL
-from cv2 import FONT_HERSHEY_COMPLEX
-from numpy import uint8 as np_uint8
 from pandas import concat
 from pandas import DataFrame
 from pandas import read_pickle
 from os.path import join
-from numpy import max
-from numpy import array
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import get_contour_centroid
-from src.utils.aux_funcs import get_area_box
-from src.utils.aux_funcs import get_contour_rratio
-from src.utils.aux_funcs import get_contour_ellipse_feats
-from src.utils.aux_funcs import get_contour_roundness
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.merge_channels import merge_multiple_images
 

@@ -7,12 +7,9 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import scatterplot
-import matplotlib.pyplot as plt
-from pandas import DataFrame
 from os.path import join
-from pandas import read_csv
 from pandas import read_pickle
+from pandas import read_csv
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_execution_parameters
@@ -34,7 +31,7 @@ def merge_label_df(infos_df_path: str,
     # read dataframes
     infos_df = read_pickle(infos_df_path)
 
-    labels_df = read_pickle(labels_df_path)
+    labels_df = read_csv(labels_df_path)
 
     # now that we have both the complete df and the
     # filter the df using a left outer join
@@ -60,7 +57,7 @@ def merge_label_df(infos_df_path: str,
 
     # repeat for status
     # sum all rows of xgal columns ang asigns it to a pre-filtered colum
-    labeled_df['cons_sstatus'] = labeled_df['s_status_h'] + labeled_df['s_status_e'] + labeled_df['s_status_h']
+    labeled_df['cons_sstatus'] = labeled_df['s_status_d'] + labeled_df['s_status_e'] + labeled_df['s_status_h']
 
     # make negative label
     labeled_df.loc[labeled_df['cons_sstatus'] < 2, 'cons_sstatus'] = 0
@@ -68,7 +65,6 @@ def merge_label_df(infos_df_path: str,
     # make positive label
     labeled_df.loc[labeled_df['cons_sstatus'] > 1, 'cons_sstatus'] = 1
 
-        
     # after obtaining the consensus features, we further obtain the stablished classes
     # label classes defined by
     # if not xgal and not senescent like -> normal/growing cell (0, 0) = 0
@@ -81,14 +77,14 @@ def merge_label_df(infos_df_path: str,
 
     # then transform the result into a label
     # we'll be using most of the sum's results, only changing one of the onesies
-    labeled_df.loc[(labeled_df['label'] == 1) & (labeled_df['status'] == 1), 'label'] = 3
+    labeled_df.loc[(labeled_df['label'] == 1) & (labeled_df['cons_sstatus'] == 1), 'label'] = 3
 
     # create the path to save the output path
     output_path = join(output_folder,
                        'labeled_contours.pickle')
 
     # saving df
-    labeled_df.to_csv(output_path, index=False)
+    labeled_df.to_pickle(output_path)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -112,8 +108,8 @@ def get_args_dict() -> dict:
     # adding arguments to parser
 
     # input csv path
-    parser.add_argument('-d', '--full-dataframe',
-                        dest='full_dataframe',
+    parser.add_argument('-i', '--full-dataframe',
+                        dest='input_dataframe',
                         required=True,
                         help='defines path to input csv containing all infos')
 
@@ -146,7 +142,7 @@ def main():
     args_dict = get_args_dict()
 
     # getting images folder
-    full_dataframe = args_dict['full_dataframe']
+    input_dataframe = args_dict['input_dataframe']
 
     # getting images extension
     label_dataframe = args_dict['label_dataframe']
@@ -161,7 +157,7 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    merge_label_df(infos_df_path=full_dataframe,
+    merge_label_df(infos_df_path=input_dataframe,
                    labels_df_path=label_dataframe,
                    output_folder=output_folder
                    )

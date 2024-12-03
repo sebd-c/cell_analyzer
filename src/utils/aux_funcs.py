@@ -306,8 +306,6 @@ def get_contour_ellipse_feats(contour: ndarray) -> tuple:
 
     # calculates aspect
     # TODO: check here for errors of 0 division
-    # print(center)
-    # print(axis)
     aspect = major_axis / minor_axis
 
     # calculates the eccentricity

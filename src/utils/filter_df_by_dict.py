@@ -2,15 +2,11 @@
 # imports
 from os.path import join
 from pandas import DataFrame
-from pandas import merge
 from pandas import concat
 from yaml import safe_load
-from pandas import read_csv
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import get_files_in_folder
-from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import print_execution_parameters
 
 
@@ -55,10 +51,8 @@ def filter_df(unfiltered_df: DataFrame,
     return filtered_df
 
 
-def filter_data(tto_input_path: str,
-                ctr_input_path: str,
-                ctr_filter_path: str,
-                tto_filter_path: str,
+def filter_data(input_path: str,
+                filter_path: str,
                 output_folder: str
                 ) -> None:
     """
@@ -67,33 +61,17 @@ def filter_data(tto_input_path: str,
     """
 
     # reading treatment df
-    tmz_df = read_pickle(tto_input_path)
-
-    # adding treatment col
-    tmz_df['tto'] = 'tmz'
-
-    # reading control df
-    ctr_df = read_pickle(ctr_input_path)
-
-    # adding treatment col
-    ctr_df['tto'] = 'ctr'
+    df = read_pickle(input_path)
 
     # applying filter function
-    # on ctr
-    filtered_ctr = filter_df(ctr_df, ctr_filter_path)
-
-    # on tto
-    filtered_tto = filter_df(tmz_df, tto_filter_path)
-
-    # concatenate both dataframes
-    concat_df = concat([filtered_tto, filtered_ctr])
+    filtered_df = filter_df(df, filter_path)
 
     # create the path to save the output path
     output_path = join(output_folder,
                        'filtered_df.pickle')
 
     # saving df
-    concat_df.to_pickle(output_path, index=False)
+    filtered_df.to_pickle(output_path)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -119,28 +97,16 @@ def get_args_dict() -> dict:
     # adding arguments to parser
 
     # input csv path for treatment
-    parser.add_argument('-t', '--tto_input_path',
-                        dest='tto_input_path',
+    parser.add_argument('-i', '--input_path',
+                        dest='input_path',
                         required=True,
                         help='defines path to input csv path for treatment')
 
-    # input csv path for control
-    parser.add_argument('-c', '--ctr_input_path',
-                        dest='ctr_input_path',
-                        required=True,
-                        help='defines path to input csv path for ctr')
-
     # input csv path for treatment
-    parser.add_argument('-tp', '--tto_parameter_path',
-                        dest='tto_parameter_path',
+    parser.add_argument('-p', '--parameter_path',
+                        dest='parameter_path',
                         required=True,
                         help='defines path to input parameters in yaml format for treatment')
-
-    # input csv path for control
-    parser.add_argument('-cp', '--ctr_parameter_path',
-                        dest='ctr_parameter_path',
-                        required=True,
-                        help='defines path to input parameters in yaml format for control')
 
     # output folder param
     parser.add_argument('-o', '--output_folder',
@@ -164,17 +130,11 @@ def main():
     # getting args dict
     args_dict = get_args_dict()
 
-    # getting images folder
-    tto_input_path = args_dict['tto_input_path']
+    # getting df path
+    input_path = args_dict['input_path']
 
-    # getting images extension
-    ctr_input_path = args_dict['ctr_input_path']
-
-    # getting tmz parameters
-    tto_parameter_path = args_dict['tto_parameter_path']
-
-    # getting ctr parameters
-    ctr_parameter_path = args_dict['ctr_parameter_path']
+    # getting parameters
+    parameter_path = args_dict['parameter_path']
 
     # getting csv output path
     output_folder = args_dict['output_folder']
@@ -186,10 +146,8 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    filter_data(tto_input_path=tto_input_path,
-                ctr_input_path=ctr_input_path,
-                ctr_filter_path=ctr_parameter_path,
-                tto_filter_path=tto_parameter_path,
+    filter_data(input_path=input_path,
+                filter_path=parameter_path,
                 output_folder=output_folder
                 )
 

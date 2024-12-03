@@ -4,7 +4,6 @@ from os.path import join
 from skimage.measure import label
 from cv2 import imread
 from cv2 import imwrite
-from cv2 import createCLAHE
 from cv2 import IMREAD_GRAYSCALE
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue

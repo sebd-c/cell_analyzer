@@ -22,11 +22,8 @@ from cv2 import cvtColor
 from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from numpy import uint8 as np_uint8
-from numpy import where as np_where
-from numpy import shape as np_shape
 from numpy import ndarray
-from numpy import nonzero
-from pandas import concat, DataFrame
+from pandas import concat
 from pandas import DataFrame
 from os.path import join
 from numpy import max
@@ -44,7 +41,6 @@ from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import make_contour_label
-from src.utils.aux_funcs import save_img_outlayers
 
 print('all required libraries successfully imported.')  # noqa
 
@@ -372,7 +368,7 @@ def make_folder_contours_df(masks_input_folder: str,
                        'contours_df.pickle')
 
     # saving df
-    contour_df.to_pickle(output_path, index=False)
+    contour_df.to_pickle(output_path)
 
     # printing execution message
     print(f'output saved to {csv_output_folder}')

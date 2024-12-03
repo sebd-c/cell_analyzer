@@ -2,14 +2,18 @@
 from os.path import join
 from argparse import ArgumentParser
 from pandas import read_csv
+from pandas import read_pickle
 from pandas import DataFrame
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score
 from sklearn.metrics import recall_score
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import balanced_accuracy_score
 from sklearn.metrics import precision_score
+from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.tree import plot_tree
 from sklearn.model_selection import train_test_split
 from src.utils.aux_funcs import print_execution_parameters
@@ -24,80 +28,95 @@ def run_dt_model_xgal(input_path: str,
                       output_folder: str
                       ) -> None:
     # read data
-    data = read_csv(input_path)
+    data = read_pickle(input_path)
 
     # set columns of interest
-    feature_cols = ['grayscale_mean',
-                    'grayscale_median',
-                    'grayscale_max',
-                    'grayscale_min',
-                    'grayscale_sum',
-                    'grayscale_int_density',
+    feature_cols = [# 'grayscale_mean',
+                    # 'grayscale_median',
+                    # 'grayscale_max',
+                    # 'grayscale_min',
+                    # 'grayscale_sum',
+                    # 'grayscale_int_density',
                     'red_mean',
                     'red_median',
                     'red_max',
                     'red_min',
                     'red_sum',
                     'red_int_density',
-                    'green_mean',
-                    'green_median',
-                    'green_max',
-                    'green_min',
-                    'green_sum',
-                    'green_int_density',
-                    'blue_mean',
-                    'blue_median',
-                    'blue_max',
-                    'blue_min',
-                    'blue_sum',
-                    'blue_int_density']
+                    # 'green_mean',
+                    # 'green_median',
+                    # 'green_max',
+                    # 'green_min',
+                    # 'green_sum',
+                    # 'green_int_density',
+                    # 'blue_mean',
+                    # 'blue_median',
+                    # 'blue_max',
+                    # 'blue_min',
+                    # 'blue_sum',
+                    # 'blue_int_density'
+                    ]
 
     # drop the ground truth column
-    X = data.drop(['xgal_d'], axis=1)
+    X = data.drop(['cons_xgal'], axis=1)
     X = X[feature_cols]
-    y = data['xgal_d']
+    y = data['cons_xgal']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
     # train model
-    clf_gini = DecisionTreeClassifier(criterion='gini', random_state=0)
+    clf = DecisionTreeClassifier(criterion='entropy', random_state=0, max_depth=4)
 
     # fit the model
-    clf_gini.fit(X_train, y_train)
+    clf.fit(X_train, y_train)
 
     # make predictions
-    y_pred_gini = clf_gini.predict(X_test)
+    y_pred = clf.predict(X_test)
 
     # getting model perfomance metrics
+    # confusion matrix
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred, normalize="all").ravel()
+
     # get the accuracy on the test group
-    acc_test = accuracy_score(y_test, y_pred_gini)
+    acc_test = accuracy_score(y_test, y_pred)
 
     # get precision
-    precision = precision_score(y_test, y_pred_gini)
+    precision = precision_score(y_test, y_pred)
 
     # get recall
-    recall = recall_score(y_test, y_pred_gini)
+    recall = recall_score(y_test, y_pred)
 
     # get f1-score
-    f1 = f1_score(y_test, y_pred_gini)
+    f1 = f1_score(y_test, y_pred)
+
+    # balanced accuracy
+    bal_accuracy_test = balanced_accuracy_score(y_test, y_pred)
 
     # repeat accuracy for train to check for overfitting
-    y_pred_train_gini = clf_gini.predict(X_train)
+    y_pred_train_gini = clf.predict(X_train)
 
     acc_train = accuracy_score(y_train, y_pred_train_gini)
 
+    bal_accuracy_train = balanced_accuracy_score(y_train, y_pred_train_gini)
+
     # make a dict
     metrics_dict = {'accuracy_train': acc_train,
+                    'bal_accuracy_train': bal_accuracy_train,
                     'accuracy_test': acc_test,
+                    'bal_accuracy_test': bal_accuracy_test,
                     'precision': precision,
                     'recall': recall,
-                    'f1_score': f1
+                    'f1_score': f1,
+                    'tp': tp,
+                    'tn': tn,
+                    'fp': fp,
+                    'fn': fn
                     }
-
+    print(metrics_dict)
     # assembling contour df, i.e, making a row
     metrics_df = DataFrame(metrics_dict, index=[0])  # noqa
 
     # getting feature importance
-    feature_importance = DataFrame(clf_gini.feature_importances_,
+    feature_importance = DataFrame(clf.feature_importances_,
                                    index=feature_cols).sort_values(0, ascending=False)
 
     # saving metrics and feature dfs
@@ -117,8 +136,8 @@ def run_dt_model_xgal(input_path: str,
     feature_importance.head(10).plot(kind='bar')
     plt.show()
 
-    fig = plt.figure(figsize=(25, 20))
-    _ = plot_tree(clf_gini,
+    fig = plt.figure(figsize=(200, 200))
+    _ = plot_tree(clf,
                   feature_names=feature_cols,
                   class_names={0: 'Negative', 1: 'Positive'},
                   filled=True,
@@ -126,6 +145,8 @@ def run_dt_model_xgal(input_path: str,
 
     plt.show()
 
+    _ = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+    plt.show()
 
 #####################################################################
 # argument parsing related functions

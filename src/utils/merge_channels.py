@@ -15,9 +15,7 @@ from cv2 import imwrite
 from cv2 import addWeighted
 from cv2 import IMREAD_GRAYSCALE
 from os.path import join
-from numpy import add as np_add
 from argparse import ArgumentParser
-from numpy import uint8 as np_uint8
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import print_execution_parameters
