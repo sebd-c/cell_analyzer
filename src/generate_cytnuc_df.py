@@ -87,17 +87,10 @@ def link_cytnuc(cyt_df: DataFrame,
         for cyto_index, cyto_row in cyt_df_img.iterrows():
             # remember to put the contour into the df
             # when saved in a csv, the contour turns into string
-            str_unextracted_cyto = cyto_row['contour']
-            print(cyto_row)
-            print(str_unextracted_cyto)
-            # print(str_unextracted_cyto)
-            # print(type(str_unextracted_cyto))
+            cyto_contour = cyto_row['contour']
 
-            str_unextracted_cyto = string_to_contours_array(input_string=str_unextracted_cyto)
-            # print(str_unextracted_cyto)
-            # print(type(str_unextracted_cyto))
-            # exit()
-            #
+            # str_unextracted_cyto = string_to_contours_array(input_string=str_unextracted_cyto)
+
             # # we adapted it with a surplus of brackets
             # # before proceeding, you need to remove that surplus of brackets
             # # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
@@ -108,15 +101,11 @@ def link_cytnuc(cyt_df: DataFrame,
             #
             # # after having adapt the string to array, we can proceed
             # unextracted_cyto = array(str_unextracted_cyto)
-            # print(unextracted_cyto)
-            # print(type(unextracted_cyto))
-            # exit()
             # extracted_cyto = UMat(unextracted_cyto)
-            # extracted_cyto = unextracted_cyto[0]
 
             # now use this cv2 function to
             # test if a point is inside an object
-            if pointPolygonTest(str_unextracted_cyto,
+            if pointPolygonTest(cyto_contour,
                                 # if it is, it'll be a match parent cytoplasm
                                 # measureDist 0 or 1
                                 (nuc_row['cx_coords'], nuc_row['cy_coords']),
@@ -137,7 +126,30 @@ def link_cytnuc(cyt_df: DataFrame,
                                'cyto_ecc': cyto_row['eccentricity'],
                                'cyto_rou': cyto_row['roundness'],
                                'cii': cyto_row['ii'],
-                               'cyto_contour': cyto_row['contour'],
+                               'cyto_grayscale_mean': cyto_row['grayscale_mean'],
+                               'cyto_grayscale_median': cyto_row['grayscale_median'],
+                               'cyto_grayscale_max': cyto_row['grayscale_max'],
+                               'cyto_grayscale_min':cyto_row['grayscale_min'],
+                               'cyto_grayscale_sum': cyto_row['grayscale_sum'],
+                               'cyto_grayscale_int_density': cyto_row['grayscale_int_density'],
+                               'cyto_red_mean': cyto_row['red_mean'],
+                               'cyto_red_median': cyto_row['red_median'],
+                               'cyto_red_max': cyto_row['red_max'],
+                               'cyto_red_min': cyto_row['red_min'],
+                               'cyto_red_sum': cyto_row['red_sum'],
+                               'cyto_red_int_density': cyto_row['red_int_density'],
+                               'cyto_green_mean': cyto_row['green_mean'],
+                               'cyto_green_median': cyto_row['green_median'],
+                               'cyto_green_max': cyto_row['green_max'],
+                               'cyto_green_min': cyto_row['green_min'],
+                               'cyto_green_sum': cyto_row['green_sum'],
+                               'cyto_green_int_density': cyto_row['green_int_density'],
+                               'cyto_blue_mean': cyto_row['blue_mean'],
+                               'cyto_blue_median': cyto_row['blue_median'],
+                               'cyto_blue_max': cyto_row['blue_max'],
+                               'cyto_blue_min': cyto_row['blue_min'],
+                               'cyto_blue_sum': cyto_row['blue_sum'],
+                               'cyto_blue_int_density': cyto_row['blue_int_density'],
                                'nuc_id': nuc_row['contour_index'],
                                'nuc_cx': nuc_row['cx_coords'],
                                'nuc_cy': nuc_row['cy_coords'],
@@ -148,7 +160,39 @@ def link_cytnuc(cyt_df: DataFrame,
                                'nuc_ecc': nuc_row['eccentricity'],
                                'nuc_rou': nuc_row['roundness'],
                                'nii': nuc_row['ii'],
-                               'nuc_contour': nuc_row['contour'],
+                               'nuc_grayscale_mean': nuc_row['grayscale_mean'],
+                               'nuc_grayscale_median': nuc_row['grayscale_median'],
+                               'nuc_grayscale_max': nuc_row['grayscale_max'],
+                               'nuc_grayscale_min': nuc_row['grayscale_min'],
+                               'nuc_grayscale_sum': nuc_row['grayscale_sum'],
+                               'nuc_grayscale_int_density': nuc_row['grayscale_int_density'],
+                               'nuc_red_mean': nuc_row['red_mean'],
+                               'nuc_red_median': nuc_row['red_median'],
+                               'nuc_red_max': nuc_row['red_max'],
+                               'nuc_red_min': nuc_row['red_min'],
+                               'nuc_red_sum': nuc_row['red_sum'],
+                               'nuc_red_int_density': nuc_row['red_int_density'],
+                               'nuc_green_mean': nuc_row['green_mean'],
+                               'nuc_green_median': nuc_row['green_median'],
+                               'nuc_green_max': nuc_row['green_max'],
+                               'nuc_green_min': nuc_row['green_min'],
+                               'nuc_green_sum': nuc_row['green_sum'],
+                               'nuc_green_int_density': nuc_row['green_int_density'],
+                               'nuc_blue_mean': nuc_row['blue_mean'],
+                               'nuc_blue_median': nuc_row['blue_median'],
+                               'nuc_blue_max': nuc_row['blue_max'],
+                               'nuc_blue_min': nuc_row['blue_min'],
+                               'nuc_blue_sum': nuc_row['blue_sum'],
+                               'nuc_blue_int_density': nuc_row['blue_int_density']
+                               # 'xgal_e': cyto_row['xgal_e'],
+                               # 'xgal_d': cyto_row['xgal_d'],
+                               # 'xgal_h': cyto_row['xgal_h'],
+                               # 's_status_e': cyto_row['s_status_e'],
+                               # 's_status_d': cyto_row['s_status_d'],
+                               # 's_status_h': cyto_row['s_status_h'],
+                               # 'cons_xgal': cyto_row['cons_xgal'],
+                               # 'cons_sstatus': cyto_row['cons_sstatus'],
+                               # 'label': cyto_row['label']
                                }
 
                 # make the new dictionary into a temporary one row df
@@ -166,7 +210,7 @@ def link_cytnuc(cyt_df: DataFrame,
     concat_linked_df = concat(linked_dfs_list, ignore_index=True)
 
     # saving new df
-    concat_linked_df.to_pickle(output_path, index=False)
+    concat_linked_df.to_pickle(output_path)
 
     return concat_linked_df
 
