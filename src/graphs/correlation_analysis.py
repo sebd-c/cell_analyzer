@@ -8,78 +8,47 @@
 ###########################################################################################
 # imports
 from seaborn import scatterplot
+from seaborn import color_palette
 import matplotlib.pyplot as plt
-from pandas import DataFrame
-from pandas import read_csv
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_execution_parameters
+from sklearn.manifold import TSNE
 
 
 ################################################################################################
 # module of aux functions related to img preprocessing
 
 
-def plot_reds(input_path: str
+def plot_tsne(input_path: str
               ) -> None:
     # read data
     data = read_pickle(input_path)
-    scatterplot(data=data, x="cyto_red_max", y="nuc_red_max", hue="tx")
-    plt.xlabel('Max Red Pixel Value from Cytoplasm')
-    plt.ylabel('Max Red Pixel Value from Cytoplasm')
-    plt.grid(False)
-    plt.show()
+
+    data_wo_labels = data.drop(columns=['image_name', 'cons_xgal', 'cons_sstatus', 'label', 'tx', 'obj_id'])
+
+    data_embedded = TSNE(n_components=2,
+                         learning_rate='auto',
+                         init='random',
+                         perplexity=3,
+                         verbose=1).fit_transform(data_wo_labels)
+
+    plt.figure(figsize=(16, 10))
+    scatterplot(
+        x=data_embedded[:, 0], y=data_embedded[:, 1],
+        hue=data['label'],
+        palette=color_palette("bright"),
+        data=data,
+        alpha=0.3
+    )
+    plt.legend(title='Classes', labels=['Normal', 'Quiescent', 'Fully senescent', 'Senescent-like'])
     plt.show()
     plt.close()
 
-
-def plot_cellmorph(input_path: str
-                   ) -> None:
-    # read data
-    data = read_pickle(input_path)
-
-    # split data to plot into different graphs
-    tmz = data[data['tx'] == 'tmz']
-    ctr = data[data['tx'] == 'ctr']
-
-    # plotting
-    plot = scatterplot(data=tmz,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph TMZ')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-    plot = scatterplot(data=ctr,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph CTR')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
 
 def plot_distributions(input_path: str
-                   ) -> None:
+                       ) -> None:
     # read data
     data = read_pickle(input_path)
 
@@ -122,7 +91,9 @@ def plot_distributions(input_path: str
     plt.show()
     plt.close()
 
-sns.displot(penguins, x="flipper_length_mm", hue="species")
+
+# sns.displot(penguins, x="flipper_length_mm", hue="species")
+
 
 # def plot_pixint_per_gt(df: DataFrame) -> None:
 #     scatterplot(data=df, x="ii", y="area", hue="xgal")
@@ -183,7 +154,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_cellmorph(input_dataframe)
+    plot_tsne(input_dataframe)
 
 
 ######################################################################
