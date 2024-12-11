@@ -39,7 +39,10 @@ def run_dt_model_senescence(input_path: str,
     X = data.drop(['label'], axis=1)
     X = X[feature_cols]
     y = data['label']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y,
+                                                        test_size=0.33,
+                                                        random_state=42,
+                                                        stratify=y)
 
     # class names
     class_names = ['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
@@ -58,7 +61,7 @@ def run_dt_model_senescence(input_path: str,
 
     # metrics for train set
 
-    # confusion matrix
+    # confusion matrix train set
     fig, ax = plt.subplots(figsize=(25, 25))
     ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax)
     ax.xaxis.set_ticklabels(class_names)
@@ -73,26 +76,87 @@ def run_dt_model_senescence(input_path: str,
     # get balanced accuracy
     bal_accuracy_train = balanced_accuracy_score(y_train, y_pred_train)
 
-    # get precision
-    precision_train = precision_score(y_train, y_pred_train)
+    # get precisions
+    global_precision_train = precision_score(y_train, y_pred_train, average='micro')
+    weighted_precision_train = precision_score(y_train, y_pred_train, average='weighted')
 
-    # get recall
-    recall_train = recall_score(y_train, y_pred_train)
+    # get recalls
+    global_recall_train = recall_score(y_train, y_pred_train, average='micro')
+    weighted_recall_train = recall_score(y_train, y_pred_train, average='weighted')
 
     # get f1-score
-    f1_train = f1_score(y_train, y_pred_train)
+    global_f1_train = f1_score(y_train, y_pred_train, average='micro')
+    weighted_f1_train = f1_score(y_train, y_pred_train, average='weighted')
 
     # make a dict
-    metrics_dict = {'accuracy_train': acc_train,
-                    'bal_accuracy_train': bal_accuracy_train,
-                    'precision': precision_train,
-                    'recall': recall_train,
-                    'f1_score': f1_train
-                    }
-    print(metrics_dict)
+    metrics_dict_train = {'accuracy_train': acc_train,
+                          'bal_accuracy_train': bal_accuracy_train,
+                          'global_precision': global_precision_train,
+                          'weighted_precision': weighted_precision_train,
+                          'global_recall': global_recall_train,
+                          'weighted_recall': weighted_recall_train,
+                          'global_f1_score': global_f1_train,
+                          'weighted_f1_score': weighted_f1_train
+                          }
+    print(metrics_dict_train)
 
     # assembling contour df, i.e, making a row
-    metrics_df = DataFrame(metrics_dict, index=[0])  # noqa
+    metrics_df_train = DataFrame(metrics_dict_train, index=[0])  # noqa
+
+    # saving metrics and feature dfs
+    # create the path to save
+    output_metrics_train = join(output_folder,
+                                'metrics_output_train.csv')
+
+    # saving df
+    metrics_df_train.to_csv(output_metrics_train, index=False)
+
+    # repeat accuracy for train to check for overfitting
+    y_pred = clf.predict(X_test)
+
+    # metrics for test set
+
+    # confusion matrix
+    fig, ax = plt.subplots(figsize=(25, 25))
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
+    ax.xaxis.set_ticklabels(class_names)
+    ax.yaxis.set_ticklabels(class_names)
+    _ = ax.set_title('Classification Confusion Matrix')
+
+    plt.show()
+
+    # get accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+
+    # get balanced accuracy
+    bal_accuracy = balanced_accuracy_score(y_test, y_pred)
+
+    # get precisions
+    global_precision = precision_score(y_test, y_pred, average='micro')
+    weighted_precision = precision_score(y_test, y_pred, average='weighted')
+
+    # get recalls
+    global_recall = recall_score(y_test, y_pred, average='micro')
+    weighted_recall = recall_score(y_test, y_pred, average='weighted')
+
+    # get f1-score
+    global_f1 = f1_score(y_test, y_pred, average='micro')
+    weighted_f1 = f1_score(y_test, y_pred, average='weighted')
+
+    # make a dict
+    metrics_dict_test = {'accuracy': accuracy,
+                         'bal_accuracy': bal_accuracy,
+                         'global_precision': global_precision,
+                         'weighted_precision': weighted_precision,
+                         'global_recall': global_recall,
+                         'weighted_recall': weighted_recall,
+                         'global_f1_score': global_f1,
+                         'weighted_f1_score': weighted_f1
+                         }
+    print(metrics_dict_test)
+
+    # assembling contour df, i.e, making a row
+    metrics_df_test = DataFrame(metrics_dict_test, index=[0])  # noqa
 
     # getting feature importance
     feature_importance = DataFrame(clf.feature_importances_,
@@ -100,13 +164,13 @@ def run_dt_model_senescence(input_path: str,
 
     # saving metrics and feature dfs
     # create the path to save
-    output_metrics = join(output_folder,
-                          'metrics_output_train.csv')
+    output_metrics_test = join(output_folder,
+                               'metrics_output_test.csv')
 
     output_featimp = join(output_folder,
                           'feat_importance_output.csv')
     # saving df
-    metrics_df.to_csv(output_metrics, index=False)
+    metrics_df_test.to_csv(output_metrics_test, index=False)
 
     feature_importance.to_csv(output_featimp, index=False)
 
@@ -123,78 +187,6 @@ def run_dt_model_senescence(input_path: str,
                   fontsize=12)
 
     plt.show()
-
-    # make predictions
-    # y_pred = clf.predict(X_test)
-    #
-    # # getting model perfomance metrics
-    # # confusion matrix
-    # tn, fp, fn, tp = confusion_matrix(y_test, y_pred, normalize="all").ravel()
-    #
-    # # get the accuracy on the test group
-    # acc_test = accuracy_score(y_test, y_pred)
-    #
-    # # get precision
-    # precision = precision_score(y_test, y_pred)
-    #
-    # # get recall
-    # recall = recall_score(y_test, y_pred)
-    #
-    # # get f1-score
-    # f1 = f1_score(y_test, y_pred)
-    #
-    # # balanced accuracy
-    # bal_accuracy_test = balanced_accuracy_score(y_test, y_pred)
-    #
-    # # make a dict
-    # metrics_dict = {'accuracy_train': acc_train,
-    #                 'bal_accuracy_train': bal_accuracy_train,
-    #                 'accuracy_test': acc_test,
-    #                 'bal_accuracy_test': bal_accuracy_test,
-    #                 'precision': precision,
-    #                 'recall': recall,
-    #                 'f1_score': f1,
-    #                 'tp': tp,
-    #                 'tn': tn,
-    #                 'fp': fp,
-    #                 'fn': fn
-    #                 }
-    # print(metrics_dict)
-    # # assembling contour df, i.e, making a row
-    # metrics_df = DataFrame(metrics_dict, index=[0])  # noqa
-    #
-    # # getting feature importance
-    # feature_importance = DataFrame(clf.feature_importances_,
-    #                                index=feature_cols).sort_values(0, ascending=False)
-    #
-    # # saving metrics and feature dfs
-    # # create the path to save
-    # output_metrics = join(output_folder,
-    #                       'metrics_output.csv')
-    #
-    # output_featimp = join(output_folder,
-    #                       'feat_importance_output.csv')
-    # # saving df
-    # metrics_df.to_csv(output_metrics, index=False)
-    #
-    # feature_importance.to_csv(output_featimp, index=False)
-    #
-    # # plottings
-    #
-    # feature_importance.head(10).plot(kind='bar')
-    # plt.show()
-    #
-    # fig = plt.figure(figsize=(400, 400))
-    # _ = plot_tree(clf,
-    #               feature_names=feature_cols,
-    #               class_names={0: 'Negative', 1: 'Positive'},
-    #               filled=True,
-    #               fontsize=12)
-    #
-    # plt.show()
-    #
-    # _ = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
-    # plt.show()
 
 
 #####################################################################
