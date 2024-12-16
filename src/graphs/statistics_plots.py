@@ -7,10 +7,9 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import scatterplot
+from seaborn import boxplot
+from seaborn import color_palette
 import matplotlib.pyplot as plt
-from pandas import DataFrame
-from pandas import read_csv
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
@@ -20,118 +19,66 @@ from src.utils.aux_funcs import print_execution_parameters
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-
-def plot_reds(input_path: str
-              ) -> None:
-    # read data
-    data = read_pickle(input_path)
-    scatterplot(data=data, x="cyto_red_max", y="nuc_red_max", hue="tx")
-    plt.xlabel('Max Red Pixel Value from Cytoplasm')
-    plt.ylabel('Max Red Pixel Value from Cytoplasm')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-
-def plot_cellmorph(input_path: str
-                   ) -> None:
+def plot_boxplots(input_path: str
+                  ) -> None:
     # read data
     data = read_pickle(input_path)
 
-    # split data to plot into different graphs
-    tmz = data[data['tx'] == 'tmz']
-    ctr = data[data['tx'] == 'ctr']
+    # list of features to plot
+    feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
+                    'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
+                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii'
+                    ]
+    label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
 
-    # plotting
-    plot = scatterplot(data=tmz,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph TMZ')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
+    data.replace({'label': label_dict}, inplace=True)
+
+    axis_dict = {'cyto_area': 'Area',
+                 'cyto_arbox': 'Area box',
+                 'cyto_radra': 'Radius ratio',
+                 'cyto_asp': 'Aspect',
+                 'cyto_ecc': 'Eccentricity',
+                 'cyto_rou': 'Roundess',
+                 'cii': 'CII',
+                 'nuc_area': 'Area',
+                 'nuc_arbox': 'Area box',
+                 'nuc_radra': 'Radius ratio',
+                 'nuc_asp': 'Aspect',
+                 'nuc_ecc': 'Eccentricity',
+                 'nuc_rou': 'Roundess',
+                 'nii': 'NII'
+                 }
+
+    ax = boxplot(data=data,
+                 x='tx',
+                 y='cii',
+                 hue='label',
+                 palette=color_palette(),
+                 gap=0.1,
+                 legend=False
+                 )
+    plt.ylim(0, 40)
+    plt.xlabel('Treatment')
+    plt.ylabel('CII')
+
     plt.grid(False)
     plt.show()
-    plt.show()
-    plt.close()
 
-    plot = scatterplot(data=ctr,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph CTR')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-def plot_distributions(input_path: str
-                   ) -> None:
-    # read data
-    data = read_pickle(input_path)
-
-    # split data to plot into different graphs
-    tmz = data[data['tx'] == 'tmz']
-    ctr = data[data['tx'] == 'ctr']
-
-    # plotting
-    plot = scatterplot(data=tmz,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph TMZ')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-    plot = scatterplot(data=ctr,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph CTR')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-sns.displot(penguins, x="flipper_length_mm", hue="species")
-
-# def plot_pixint_per_gt(df: DataFrame) -> None:
-#     scatterplot(data=df, x="ii", y="area", hue="xgal")
-#     plt.xlabel('Irregularity Index')
-#     plt.ylabel('Area')
-#     plt.grid(False)
-#     plt.show()
-#     plt.show()
-#     plt.close()
+    # # Iterating through axes and names
+    # for feature in feature_cols:
+    #     ax = boxplot(data=data,
+    #                  x='tx',
+    #                  y=feature,
+    #                  hue='label',
+    #                  palette=color_palette(),
+    #                  gap=0.1,
+    #                  legend=False
+    #                  )
+    #     plt.xlabel('Treatment')
+    #     plt.ylabel(axis_dict[feature])
+    #
+    #     plt.grid(False)
+    #     plt.show()
 
 
 #####################################################################
@@ -183,7 +130,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_cellmorph(input_dataframe)
+    plot_boxplots(input_dataframe)
 
 
 ######################################################################

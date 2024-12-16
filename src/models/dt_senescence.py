@@ -40,7 +40,7 @@ def run_dt_model_senescence(input_path: str,
     X = X[feature_cols]
     y = data['label']
     X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                        test_size=0.33,
+                                                        test_size=0.3,
                                                         random_state=42,
                                                         stratify=y)
 
@@ -50,7 +50,9 @@ def run_dt_model_senescence(input_path: str,
     # train model
     clf = DecisionTreeClassifier(criterion='entropy',
                                  random_state=0,
-                                 max_depth=5,
+                                 max_depth=3,
+                                 ccp_alpha=0.025,
+                                 # min_samples_leaf=5,
                                  class_weight='balanced')
 
     # fit the model
@@ -63,13 +65,20 @@ def run_dt_model_senescence(input_path: str,
 
     # confusion matrix train set
     fig, ax = plt.subplots(figsize=(25, 25))
-    ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax)
+    ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax, normalize='true')
     ax.xaxis.set_ticklabels(class_names)
     ax.yaxis.set_ticklabels(class_names)
-    _ = ax.set_title('Classification Confusion Matrix')
+    _ = ax.set_title('Classification Confusion Matrix Train Normalized')
 
     plt.show()
 
+    fig, ax = plt.subplots(figsize=(25, 25))
+    ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax)
+    ax.xaxis.set_ticklabels(class_names)
+    ax.yaxis.set_ticklabels(class_names)
+    _ = ax.set_title('Classification Confusion Matrix Train')
+
+    plt.show()
     # get accuracy
     acc_train = accuracy_score(y_train, y_pred_train)
 
@@ -88,40 +97,23 @@ def run_dt_model_senescence(input_path: str,
     global_f1_train = f1_score(y_train, y_pred_train, average='micro')
     weighted_f1_train = f1_score(y_train, y_pred_train, average='weighted')
 
-    # make a dict
-    metrics_dict_train = {'accuracy_train': acc_train,
-                          'bal_accuracy_train': bal_accuracy_train,
-                          'global_precision': global_precision_train,
-                          'weighted_precision': weighted_precision_train,
-                          'global_recall': global_recall_train,
-                          'weighted_recall': weighted_recall_train,
-                          'global_f1_score': global_f1_train,
-                          'weighted_f1_score': weighted_f1_train
-                          }
-    print(metrics_dict_train)
-
-    # assembling contour df, i.e, making a row
-    metrics_df_train = DataFrame(metrics_dict_train, index=[0])  # noqa
-
-    # saving metrics and feature dfs
-    # create the path to save
-    output_metrics_train = join(output_folder,
-                                'metrics_output_train.csv')
-
-    # saving df
-    metrics_df_train.to_csv(output_metrics_train, index=False)
-
-    # repeat accuracy for train to check for overfitting
+    # repeat model prediction and metrics for test set
     y_pred = clf.predict(X_test)
 
-    # metrics for test set
-
     # confusion matrix
+    fig, ax = plt.subplots(figsize=(25, 25))
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax, normalize='true')
+    ax.xaxis.set_ticklabels(class_names)
+    ax.yaxis.set_ticklabels(class_names)
+    _ = ax.set_title('Classification Confusion Matrix Normalized Test')
+
+    plt.show()
+
     fig, ax = plt.subplots(figsize=(25, 25))
     ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
     ax.xaxis.set_ticklabels(class_names)
     ax.yaxis.set_ticklabels(class_names)
-    _ = ax.set_title('Classification Confusion Matrix')
+    _ = ax.set_title('Classification Confusion Matrix Test')
 
     plt.show()
 
@@ -144,19 +136,27 @@ def run_dt_model_senescence(input_path: str,
     weighted_f1 = f1_score(y_test, y_pred, average='weighted')
 
     # make a dict
-    metrics_dict_test = {'accuracy': accuracy,
-                         'bal_accuracy': bal_accuracy,
-                         'global_precision': global_precision,
-                         'weighted_precision': weighted_precision,
-                         'global_recall': global_recall,
-                         'weighted_recall': weighted_recall,
-                         'global_f1_score': global_f1,
-                         'weighted_f1_score': weighted_f1
-                         }
-    print(metrics_dict_test)
+    metrics_dict = {'accuracy_train': acc_train,
+                    'bal_accuracy_train': bal_accuracy_train,
+                    'global_precision_train': global_precision_train,
+                    'weighted_precision_train': weighted_precision_train,
+                    'global_recall_train': global_recall_train,
+                    'weighted_recall_train': weighted_recall_train,
+                    'global_f1_score_train': global_f1_train,
+                    'weighted_f1_score_train': weighted_f1_train,
+                    'accuracy_test': accuracy,
+                    'bal_accuracy_test': bal_accuracy,
+                    'global_precision_test': global_precision,
+                    'weighted_precision_test': weighted_precision,
+                    'global_recall_test': global_recall,
+                    'weighted_recall_test': weighted_recall,
+                    'global_f1_score_test': global_f1,
+                    'weighted_f1_score_test': weighted_f1
+                    }
+    print(metrics_dict)
 
     # assembling contour df, i.e, making a row
-    metrics_df_test = DataFrame(metrics_dict_test, index=[0])  # noqa
+    metrics_df = DataFrame(metrics_dict, index=[0])  # noqa
 
     # getting feature importance
     feature_importance = DataFrame(clf.feature_importances_,
@@ -164,13 +164,13 @@ def run_dt_model_senescence(input_path: str,
 
     # saving metrics and feature dfs
     # create the path to save
-    output_metrics_test = join(output_folder,
-                               'metrics_output_test.csv')
+    output_metrics = join(output_folder,
+                          'metrics_output.csv')
 
     output_featimp = join(output_folder,
                           'feat_importance_output.csv')
     # saving df
-    metrics_df_test.to_csv(output_metrics_test, index=False)
+    metrics_df.to_csv(output_metrics, index=False)
 
     feature_importance.to_csv(output_featimp, index=False)
 
@@ -179,10 +179,10 @@ def run_dt_model_senescence(input_path: str,
     feature_importance.head(10).plot(kind='bar')
     plt.show()
 
-    fig = plt.figure(figsize=(1000, 1000))
+    fig = plt.figure(figsize=(400, 400))
     _ = plot_tree(clf,
                   feature_names=feature_cols,
-                  class_names={0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 4: 'Senescent-like'},
+                  class_names={0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'},
                   filled=True,
                   fontsize=12)
 
