@@ -7,7 +7,9 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import boxplot
+from seaborn import displot
+from seaborn import scatterplot
+from seaborn import kdeplot
 from seaborn import color_palette
 import matplotlib.pyplot as plt
 from pandas import read_pickle
@@ -19,8 +21,8 @@ from src.utils.aux_funcs import print_execution_parameters
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-def plot_boxplots(input_path: str
-                  ) -> None:
+def plot_distributions(input_path: str
+                       ) -> None:
     # read data
     data = read_pickle(input_path)
 
@@ -48,34 +50,59 @@ def plot_boxplots(input_path: str
                  'nuc_rou': 'Roundess',
                  'nii': 'NII'
                  }
+    scatterplot(data=data,
+                x='cyto_area',
+                y='nuc_area',
+                hue='label',
+                palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+                hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+                )
+    plt.xlabel('Cytoplasmic Area')
+    plt.ylabel('Nuclear Area')
+    plt.xlim(0, 200000)
+    plt.grid(False)
+    plt.show()
 
-    ax = boxplot(data=data,
-                 x='tx',
-                 y='nuc_radra',
-                 hue='label',
-                 palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
-                 gap=0.1,
-                 # log_scale=10,
-                 hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
-                 )
-    plt.xlabel('Treatment')
-    plt.ylabel('Nuclear Radius Ratio')
+    scatterplot(data=data,
+                x='cyto_ecc',
+                y='nuc_ecc',
+                hue='label',
+                palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+                hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+                )
+    plt.xlabel('Cytoplasmic Eccentricity')
+    plt.ylabel('Nuclear Eccentricity')
+    plt.grid(False)
+    plt.show()
 
+    scatterplot(data=data,
+                x='cyto_area',
+                y='cyto_ecc',
+                hue='label',
+                palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+                hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+                )
+    plt.xlabel('Cytoplasmic Area')
+    plt.ylabel('Cytoplasmic Eccentricity')
+    plt.grid(False)
+    plt.show()
+
+    scatterplot(data=data,
+                x='nuc_area',
+                y='nuc_ecc',
+                hue='label',
+                palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+                hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+                )
+    plt.xlabel('Nuclear Area')
+    plt.ylabel('Nuclear Eccentricity')
     plt.grid(False)
     plt.show()
 
     # # Iterating through axes and names
     # for feature in feature_cols:
-    #     ax = boxplot(data=data,
-    #                  x='tx',
-    #                  y=feature,
-    #                  hue='label',
-    #                  palette=color_palette(),
-    #                  gap=0.1,
-    #                  legend=False
-    #                  )
-    #     plt.xlabel('Treatment')
-    #     plt.ylabel(axis_dict[feature])
+    #     ax = kdeplot(data, x=feature, hue='label')
+    #     plt.xlabel(axis_dict[feature])
     #
     #     plt.grid(False)
     #     plt.show()
@@ -130,7 +157,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_boxplots(input_dataframe)
+    plot_distributions(input_dataframe)
 
 
 ######################################################################

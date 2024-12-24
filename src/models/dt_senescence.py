@@ -3,6 +3,7 @@ from os.path import join
 from argparse import ArgumentParser
 from pandas import read_pickle
 from pandas import DataFrame
+import graphviz
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score
 from sklearn.metrics import recall_score
@@ -14,6 +15,9 @@ from sklearn.metrics import confusion_matrix
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.tree import plot_tree
+from six import StringIO
+import pydotplus
+from sklearn.tree import export_graphviz
 from sklearn.model_selection import train_test_split
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import enter_to_continue
@@ -29,11 +33,19 @@ def run_dt_model_senescence(input_path: str,
     # read data
     data = read_pickle(input_path)
 
+    # add circularity
+    data['cyto_circ'] = 1 / data['cyto_rou']
+    data['nuc_circ'] = 1 / data['nuc_rou']
+
     # set columns of interest
-    feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
+    feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_circ', 'cyto_radra', 'cyto_asp',
                     'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
-                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii',
+                    'nuc_radra', 'nuc_asp', 'nuc_circ', 'nuc_ecc', 'nuc_rou', 'nii',
                     ]
+
+    label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
+
+    # data.replace({'label': label_dict}, inplace=True)
 
     # drop the ground truth column
     X = data.drop(['label'], axis=1)
@@ -50,9 +62,10 @@ def run_dt_model_senescence(input_path: str,
     # train model
     clf = DecisionTreeClassifier(criterion='entropy',
                                  random_state=0,
-                                 max_depth=3,
-                                 ccp_alpha=0.025,
-                                 # min_samples_leaf=5,
+                                 max_depth=7,
+                                 ccp_alpha=0.019,
+                                 min_samples_leaf=10,
+                                 max_features="sqrt",
                                  class_weight='balanced')
 
     # fit the model
@@ -176,18 +189,19 @@ def run_dt_model_senescence(input_path: str,
 
     # plottings
 
-    feature_importance.head(10).plot(kind='bar')
+    feature_importance.plot(kind='bar')
     plt.show()
 
-    fig = plt.figure(figsize=(400, 400))
-    _ = plot_tree(clf,
-                  feature_names=feature_cols,
-                  class_names={0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'},
-                  filled=True,
-                  fontsize=12)
-
-    plt.show()
-
+    output_tree = join(output_folder,
+                       'tree.png')
+    dot_data = StringIO()
+    export_graphviz(clf, out_file=dot_data,
+                    feature_names=feature_cols,
+                    class_names=class_names,
+                    filled=True, rounded=True,
+                    special_characters=True)
+    graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
+    graph.write_png('decision_tree.png')
 
 #####################################################################
 # argument parsing related functions

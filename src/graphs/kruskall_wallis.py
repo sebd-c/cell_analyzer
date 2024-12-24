@@ -7,9 +7,8 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import boxplot
-from seaborn import color_palette
-import matplotlib.pyplot as plt
+from scipy.stats import kruskal
+import scikit_posthocs as sp
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
@@ -19,66 +18,55 @@ from src.utils.aux_funcs import print_execution_parameters
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-def plot_boxplots(input_path: str
-                  ) -> None:
+def run_kruskal_wallis_h(input_path: str
+                         ) -> None:
     # read data
     data = read_pickle(input_path)
 
+    # add circularity
+    data['cyto_circ'] = 1 / data['cyto_rou']
+    data['nuc_circ'] = 1 / data['nuc_rou']
+
     # list of features to plot
     feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
-                    'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
-                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii'
+                    'cyto_ecc', 'cyto_rou', 'cyto_circ', 'cii', 'nuc_area', 'nuc_arbox',
+                    'nuc_radra', 'nuc_asp', 'nuc_circ', 'nuc_ecc', 'nuc_rou', 'nii'
                     ]
-    label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
+    # label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
 
-    data.replace({'label': label_dict}, inplace=True)
+    # data.replace({'label': label_dict}, inplace=True)
 
-    axis_dict = {'cyto_area': 'Area',
-                 'cyto_arbox': 'Area box',
-                 'cyto_radra': 'Radius ratio',
-                 'cyto_asp': 'Aspect',
-                 'cyto_ecc': 'Eccentricity',
-                 'cyto_rou': 'Roundess',
-                 'cii': 'CII',
-                 'nuc_area': 'Area',
-                 'nuc_arbox': 'Area box',
-                 'nuc_radra': 'Radius ratio',
-                 'nuc_asp': 'Aspect',
-                 'nuc_ecc': 'Eccentricity',
-                 'nuc_rou': 'Roundess',
-                 'nii': 'NII'
-                 }
+    # Loop through each feature and perform the Kruskal-Wallis H test
+    results = {}
+    for feature in feature_cols:
+        # Group data by the label and extract feature values
+        groups = data.groupby('label')[feature]
+        grouped_values = [group for _, group in groups]
 
-    ax = boxplot(data=data,
-                 x='tx',
-                 y='nuc_radra',
-                 hue='label',
-                 palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
-                 gap=0.1,
-                 # log_scale=10,
-                 hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
-                 )
-    plt.xlabel('Treatment')
-    plt.ylabel('Nuclear Radius Ratio')
+        # Perform Kruskal-Wallis H test
+        stat, p = kruskal(*grouped_values)
 
-    plt.grid(False)
-    plt.show()
+        # Store results
+        results[feature] = {'statistic': stat, 'p_value': p}
 
-    # # Iterating through axes and names
-    # for feature in feature_cols:
-    #     ax = boxplot(data=data,
-    #                  x='tx',
-    #                  y=feature,
-    #                  hue='label',
-    #                  palette=color_palette(),
-    #                  gap=0.1,
-    #                  legend=False
-    #                  )
-    #     plt.xlabel('Treatment')
-    #     plt.ylabel(axis_dict[feature])
-    #
-    #     plt.grid(False)
-    #     plt.show()
+    # Display the results
+    for feature, result in results.items():
+        print(f"Feature: {feature}")
+        print(f"  Kruskal-Wallis H statistic: {result['statistic']}")
+        print(f"  P-value: {result['p_value']}")
+        if result['p_value'] < 0.05:
+            print(f"  Significant differences found between the groups.")
+            # Prepare data for Dunn's test
+            dunn_data = data[[feature, 'label']]
+
+            # Perform Dunn's test
+            dunn_result = sp.posthoc_dunn(dunn_data, val_col=feature, group_col='label', p_adjust='bonferroni')
+
+            # Print Dunn's test results
+            print("  Dunn's test results (p-values):")
+            print(dunn_result)
+        else:
+            print(f"  No significant differences found between the groups.")
 
 
 #####################################################################
@@ -130,7 +118,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_boxplots(input_dataframe)
+    run_kruskal_wallis_h(input_dataframe)
 
 
 ######################################################################

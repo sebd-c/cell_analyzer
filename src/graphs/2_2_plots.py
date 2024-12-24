@@ -7,10 +7,13 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import boxplot
+
+from itertools import combinations
+from seaborn import scatterplot
 from seaborn import color_palette
 import matplotlib.pyplot as plt
 from pandas import read_pickle
+from sklearn.metrics import silhouette_score
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_execution_parameters
@@ -19,19 +22,17 @@ from src.utils.aux_funcs import print_execution_parameters
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-def plot_boxplots(input_path: str
-                  ) -> None:
+
+def plot_distributions(input_path: str
+                       ) -> None:
     # read data
     data = read_pickle(input_path)
 
-    # list of features to plot
+    # set columns of interest
     feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
                     'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
-                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii'
+                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii',
                     ]
-    label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
-
-    data.replace({'label': label_dict}, inplace=True)
 
     axis_dict = {'cyto_area': 'Area',
                  'cyto_arbox': 'Area box',
@@ -49,37 +50,36 @@ def plot_boxplots(input_path: str
                  'nii': 'NII'
                  }
 
-    ax = boxplot(data=data,
-                 x='tx',
-                 y='nuc_radra',
-                 hue='label',
-                 palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
-                 gap=0.1,
-                 # log_scale=10,
-                 hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
-                 )
-    plt.xlabel('Treatment')
-    plt.ylabel('Nuclear Radius Ratio')
+    comb = combinations(feature_cols, 2)
 
-    plt.grid(False)
-    plt.show()
+    for i in list(comb):
+        X = data[[i[0], i[1]]]
+        labels = data['label']
 
-    # # Iterating through axes and names
-    # for feature in feature_cols:
-    #     ax = boxplot(data=data,
-    #                  x='tx',
-    #                  y=feature,
-    #                  hue='label',
-    #                  palette=color_palette(),
-    #                  gap=0.1,
-    #                  legend=False
-    #                  )
-    #     plt.xlabel('Treatment')
-    #     plt.ylabel(axis_dict[feature])
-    #
-    #     plt.grid(False)
-    #     plt.show()
+        # Compute silhouette score
+        sil_score = silhouette_score(X, labels)
 
+        print(f"Feature: {i[0]}")
+        print(f"Feature: {i[1]}")
+        print(f"Silhouette score: {sil_score}")
+
+        ax = scatterplot(data=data,
+                         x=data[i[0]],
+                         y=data[i[1]],
+                         hue='label',
+                         palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+                         hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+                         )
+        plt.xlabel(axis_dict[i[0]])
+        plt.ylabel(axis_dict[i[1]])
+        plt.grid(False)
+        plt.text(1, 1,
+                 f"Silhouette score: {sil_score: .3f}",
+                 horizontalalignment='right',
+                 verticalalignment='top',
+                 transform=ax.transAxes)
+        plt.show()
+        plt.savefig(f"{i[0]}_{i[1]}.pdf")
 
 #####################################################################
 # argument parsing related functions
@@ -130,7 +130,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_boxplots(input_dataframe)
+    plot_distributions(input_dataframe)
 
 
 ######################################################################
