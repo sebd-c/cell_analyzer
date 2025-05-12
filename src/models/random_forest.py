@@ -34,7 +34,7 @@ from src.utils.aux_funcs import enter_to_continue
 # auxiliary functions
 
 
-def run_dt_model_senescence(input_path: str,
+def run_rf_model_senescence(input_path: str,
                             output_folder: str
                             ) -> None:
     # read data
@@ -67,13 +67,14 @@ def run_dt_model_senescence(input_path: str,
     class_names = ['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
 
     # train model
-    clf = DecisionTreeClassifier(criterion='entropy',
+    clf = RandomForestClassifier(criterion='entropy',
                                  random_state=0,
-                                 max_depth=7,
+                                 # max_depth=7,
                                  ccp_alpha=0.019,
-                                 min_samples_leaf=10,
+                                 # min_samples_leaf=10,
                                  max_features="sqrt",
-                                 class_weight='balanced')
+                                 class_weight='balanced',
+                                 verbose=1)
 
     # fit the model
     clf.fit(X_train, y_train)
@@ -202,11 +203,13 @@ def run_dt_model_senescence(input_path: str,
     output_tree = join(output_folder,
                        'tree.png')
     dot_data = StringIO()
-    export_graphviz(clf, out_file=dot_data,
+    export_graphviz(clf,
+                    out_file=dot_data,
                     feature_names=feature_cols,
                     class_names=class_names,
                     filled=True, rounded=True,
                     special_characters=True)
+
     graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
     graph.write_png('decision_tree.png')
 
