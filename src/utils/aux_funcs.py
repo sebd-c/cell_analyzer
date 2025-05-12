@@ -12,6 +12,7 @@ from os import listdir
 from sys import stdout
 from numpy import ndarray
 from cv2 import moments
+from cv2 import boundingRect
 from cv2 import minAreaRect
 from cv2 import FONT_HERSHEY_COMPLEX
 from cv2 import putText
@@ -22,6 +23,8 @@ from math import sqrt
 from cv2 import fitEllipse
 from cv2 import arcLength
 from math import pi
+from pandas import DataFrame
+from skimage.feature import graycomatrix, graycoprops
 from os.path import join
 from numpy import mean
 from numpy import median
@@ -327,6 +330,49 @@ def get_contour_roundness(contour: ndarray, contour_area: float) -> float:
     roundness = (contour_perimeter ** 2) / (4 * contour_area * pi)
 
     return roundness
+
+def get_contour_textures(contour: ndarray,
+                         phase_red: ndarray,
+                         phase_green: ndarray,
+                         phase_blue: ndarray
+                         ) -> DataFrame:
+    """
+    given a contour,
+    return its texture metrics
+    """
+
+    # organize images in dict for future looping
+    phase_images = {
+        'red': phase_red,
+        'blue': phase_blue,
+        'green': phase_green
+    }
+
+    # Dictionary to store all results
+    texture_dict = {}
+
+    # getting bounding box around the contour
+    x, y, w, h = boundingRect(contour)
+
+    for image in phase_red, phase_blue, phase_green:
+        # getting image wanted patchs
+        roi = image[y:y + h, x:x + w]
+
+        # getting contour grey level co-ocurrence matrix
+        glcm = greycomatrix(contour, [5], [0], 256, symmetric=True, normed=True)
+
+        # Compute and store texture features with dynamic keys
+        texture_dict[f'{phase_name}_contrast'] = graycoprops(glcm, 'contrast')[0, 0]
+        texture_dict[f'{phase_name}_dissimilarity'] = graycoprops(glcm, 'dissimilarity')[0, 0]
+        texture_dict[f'{phase_name}_homogeneity'] = graycoprops(glcm, 'homogeneity')[0, 0]
+        texture_dict[f'{phase_name}_energy'] = graycoprops(glcm, 'energy')[0, 0]
+        texture_dict[f'{phase_name}_correlation'] = graycoprops(glcm, 'correlation')[0, 0]
+        texture_dict[f'{phase_name}_ASM'] = graycoprops(glcm, 'ASM')[0, 0]
+
+    # assembling texture df, i.e, making a row
+    texture_df = DataFrame(texture_dict, index=[0])  # noqa
+
+    return texture_df
 
 
 def get_files_in_folder(path_to_folder: str,

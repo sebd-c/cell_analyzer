@@ -60,7 +60,7 @@ def get_parameters_df(contour: ndarray,
     calculates and adresses desired values to columns
     and returns a single row dataframe of that
     :param contour: contour from cv2
-    :param pixel_int: pixel intensity from the original mask, will be used as a indexer
+    :param pixel_int: pixel intensity from the original mask, will be used as an indexer
     :param mask_name: image name, used to address and properly fill the df
     :param flag: comes from the processing function, 0 if used in grayscale and 1 if used in phase
     :param pixint_list: list of pixel intensities of the grayscale channel
