@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 # imports module
 from os.path import join
+from os import system
 from argparse import ArgumentParser
 from pandas import read_pickle
 from pandas import DataFrame
@@ -23,7 +24,7 @@ from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.tree import plot_tree
 from six import StringIO
 import pydotplus
-from sklearn.tree import export_graphviz
+from sklearn import tree
 from sklearn.model_selection import train_test_split
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import enter_to_continue
@@ -31,7 +32,28 @@ N_TREES = 10
 
 ##########################################################################################
 # auxiliary functions
+#TODO: separate code in blocks of functions
+def split_data():
+    pass
 
+def train_model():
+    pass
+
+def get_model_metrics():
+    pass
+
+def make_trees():
+    pass
+
+def make_tree():
+    pass
+
+
+def get_confusion_matrix():
+    pass
+
+def get_featimp():
+    pass
 
 def run_rf_model_senescence(input_path: str,
                             output_folder: str
@@ -202,17 +224,17 @@ def run_rf_model_senescence(input_path: str,
 
 
     for index in range(0, N_TREES):
-        dot_data = StringIO()
-        export_graphviz(clf.estimators_[index],
-                        out_file=dot_data,
-                        feature_names=feature_cols,
-                        class_names=class_names,
-                        filled=True,
-                        rounded=True,
-                        special_characters=True)
+        #dot_data = StringIO()
+        dot_data = tree.export_graphviz(clf.estimators_[index],
+                                        out_file=None,
+                                        feature_names=feature_cols,
+                                        class_names=class_names,
+                                        filled=True,
+                                        rounded=True,
+                                        special_characters=True)
 
-        graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
-        graph.write_png('dtree' + str(index) + '.png')
+        graph = pydotplus.graph_from_dot_data(dot_data)
+        graph.write_png('dtree' + str(index) + '.pdf')
 
 # # Counters
 # class_node_counts = {cls: 0 for cls in clf.classes_}
