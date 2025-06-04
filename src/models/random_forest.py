@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
-import category_encoders as ce
 from sklearn.ensemble import RandomForestClassifier
 # imports module
 from os.path import join
@@ -28,7 +27,7 @@ from sklearn.tree import export_graphviz
 from sklearn.model_selection import train_test_split
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import enter_to_continue
-
+N_TREES = 10
 
 ##########################################################################################
 # auxiliary functions
@@ -68,10 +67,11 @@ def run_rf_model_senescence(input_path: str,
 
     # train model
     clf = RandomForestClassifier(criterion='entropy',
+                                 n_estimators=N_TREES,
                                  random_state=0,
-                                 # max_depth=7,
-                                 ccp_alpha=0.019,
-                                 # min_samples_leaf=10,
+                                 max_depth=10,
+                                 ccp_alpha=0.01,
+                                 #min_samples_split=3,
                                  max_features="sqrt",
                                  class_weight='balanced',
                                  verbose=1)
@@ -83,7 +83,6 @@ def run_rf_model_senescence(input_path: str,
     y_pred_train = clf.predict(X_train)
 
     # metrics for train set
-
     # confusion matrix train set
     fig, ax = plt.subplots(figsize=(25, 25))
     ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax, normalize='true')
@@ -200,18 +199,56 @@ def run_rf_model_senescence(input_path: str,
     feature_importance.plot(kind='bar')
     plt.show()
 
-    output_tree = join(output_folder,
-                       'tree.png')
-    dot_data = StringIO()
-    export_graphviz(clf,
-                    out_file=dot_data,
-                    feature_names=feature_cols,
-                    class_names=class_names,
-                    filled=True, rounded=True,
-                    special_characters=True)
 
-    graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
-    graph.write_png('decision_tree.png')
+
+    for index in range(0, N_TREES):
+        dot_data = StringIO()
+        export_graphviz(clf.estimators_[index],
+                        out_file=dot_data,
+                        feature_names=feature_cols,
+                        class_names=class_names,
+                        filled=True,
+                        rounded=True,
+                        special_characters=True)
+
+        graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
+        graph.write_png('dtree' + str(index) + '.png')
+
+# # Counters
+# class_node_counts = {cls: 0 for cls in clf.classes_}
+# same_class_parent_counts = {cls: 0 for cls in clf.classes_}
+#
+# # Traverse each tree
+# for estimator in clf.estimators_:
+#     tree = estimator.tree_
+#
+#     def traverse(node):
+#         left = tree.children_left[node]
+#         right = tree.children_right[node]
+#         is_leaf = left == -1 and right == -1
+#
+#         if is_leaf:
+#             # Get the predicted class for this leaf node
+#             class_id = np.argmax(tree.value[node][0])
+#             class_label = clf.classes_[class_id]
+#             class_node_counts[class_label] += 1
+#             return class_label
+#
+#         # Recursively check children
+#         left_class = traverse(left)
+#         right_class = traverse(right)
+#
+#         if (tree.children_left[left] == -1 and tree.children_right[left] == -1 and
+#             tree.children_left[right] == -1 and tree.children_right[right] == -1):
+#             if left_class == right_class:
+#                 same_class_parent_counts[left_class] += 1
+#
+#         return None  # Internal node doesn't return a class
+#
+#     traverse(0)  # Start from the root
+#
+# print("Leaf node counts per class:", class_node_counts)
+# print("Parent nodes with same-class leaves:", same_class_parent_counts)
 
 #####################################################################
 # argument parsing related functions
@@ -222,7 +259,7 @@ def get_args_dict() -> dict:
     Parses the arguments and returns a dictionary of the arguments.
     """
     # defining program description
-    description = 'runs a decision tree model'
+    description = 'runs a random forest model'
 
     # creating a parser instance
     parser = ArgumentParser(description=description)
@@ -270,7 +307,7 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    run_dt_model_senescence(input_path=input_path,
+    run_rf_model_senescence(input_path=input_path,
                             output_folder=output_folder
                             )
 
@@ -284,31 +321,3 @@ if __name__ == '__main__':
 
 ######################################################################
 # end of current module
-
-# get data
-# TODO: connect this pipeline with the segmentation one
-
-# labeling?
-X = df.drop(['class'], axis=1)
-
-y = df['class']
-
-# split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.33, random_state = 42)
-
-# encode categorical variables with ordinal encoding
-
-encoder = ce.OrdinalEncoder(cols=[])
-
-X_train = encoder.fit_transform(X_train)
-
-X_test = encoder.transform(X_test)
-
-# instantiate the classifier
-rfc = RandomForestClassifier(random_state=0)
-
-# fit the model
-rfc.fit(X_train, y_train)
-
-# Predict the Test set results
-y_pred = rfc.predict(X_test)
