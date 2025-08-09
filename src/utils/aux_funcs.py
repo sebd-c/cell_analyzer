@@ -399,8 +399,8 @@ def get_files_in_folder(path_to_folder: str,
 
 
 def make_contour_label(contour_index: int,
-                       centroid_x: float,
-                       centroid_y: float,
+                       centroid_x: int or float,
+                       centroid_y: int or float,
                        color: int or tuple,
                        thickness: int,
                        img_to_label: ndarray,
@@ -409,6 +409,7 @@ def make_contour_label(contour_index: int,
     """
     Writes a single contour label in an image
     """
+
     # making prep to put outlines and labels
     # fontScale
     font_scale = 1
