@@ -155,7 +155,7 @@ def get_parameters_df(contour: ndarray,
 
     else:
         contour_dict = {'image_name': mask_name,
-                        'contour_index': -1,
+                        'contour_index': int(pixel_int),
                         'cx_coords': 0,
                         'cy_coords': 0,
                         'area': -1,
@@ -237,21 +237,31 @@ def process_contour_phase(single_contour_img: ndarray,
                                           phase_green_list=phase_green_intensity,
                                           phase_blue_list=phase_blue_intensity
                                           )
-    rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
-    single_contour_df.drop(rows_to_delete, inplace=True)
+    # rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
+    # single_contour_df.drop(rows_to_delete, inplace=True)
 
-    if not len(single_contour_df) == 0:
-        # put label
-        make_contour_label(contour_index=int(pixint),
-                           centroid_x=single_contour_df['cx_coords'].iloc[0],
-                           centroid_y=single_contour_df['cy_coords'].iloc[0],
-                           color=255,
-                           thickness=2,
-                           img_to_label=image,
-                           contour=contour[0],
-                           )
-    else:
-        pass
+    # if not len(single_contour_df) == 0:
+    #     # put label
+    #     make_contour_label(contour_index=int(pixint),
+    #                        centroid_x=single_contour_df['cx_coords'].iloc[0],
+    #                        centroid_y=single_contour_df['cy_coords'].iloc[0],
+    #                        color=255,
+    #                        thickness=2,
+    #                        img_to_label=image,
+    #                        contour=contour[0],
+    #                        )
+    # else:
+    #     pass
+
+    # put label
+    make_contour_label(contour_index=int(pixint),
+                       centroid_x=single_contour_df['cx_coords'].iloc[0],
+                       centroid_y=single_contour_df['cy_coords'].iloc[0],
+                       color=255,
+                       thickness=2,
+                       img_to_label=image,
+                       contour=contour[0],
+                       )
 
     # returns the contours and the list of intensities
     return single_contour_df
