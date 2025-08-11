@@ -31,6 +31,8 @@ from numpy import min
 from numpy import mean
 from numpy import median
 from numpy import sum
+from numpy import unique
+import tifffile
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
 from src.utils.aux_funcs import get_area_box
@@ -172,6 +174,28 @@ def get_parameters_df(contour: ndarray,
     return contour_df
 
 
+def get_unique_ids(mask: ndarray) -> list:
+    """
+    Given an image of segmentation masks, returns
+    a list containing all object ids.
+    """
+    # getting current mask unique values
+    object_ids = unique(mask)
+
+    # converting ids to list
+    object_ids = object_ids.tolist()
+
+    if 0 in object_ids:
+        # removing zero from list (background pixel)
+        object_ids.remove(0)
+
+    # sorting list
+    object_ids = sorted(object_ids)
+
+    # returning object ids list
+    return object_ids
+
+
 def process_contour_phase(single_contour_img: ndarray,
                           mask_name: str,
                           pixint: float,
@@ -204,9 +228,6 @@ def process_contour_phase(single_contour_img: ndarray,
     # finding contour in image
     contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
 
-    # print(contour)
-    # print(contour[0])
-    # exit()
     single_contour_df = get_parameters_df(contour=contour[0],
                                           pixel_int=pixint,
                                           mask_name=mask_name,
@@ -219,8 +240,6 @@ def process_contour_phase(single_contour_img: ndarray,
     rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
     single_contour_df.drop(rows_to_delete, inplace=True)
 
-    print(single_contour_df.shape)
-
     if not len(single_contour_df) == 0:
         # put label
         make_contour_label(contour_index=int(pixint),
@@ -231,6 +250,8 @@ def process_contour_phase(single_contour_img: ndarray,
                            img_to_label=image,
                            contour=contour[0],
                            )
+    else:
+        pass
 
     # returns the contours and the list of intensities
     return single_contour_df
@@ -261,14 +282,19 @@ def make_image_contours_df(mask_name: str,
     phase_red, phase_green, phase_blue = split(phase_image)
 
     # reading mask and image
-    mask = imread(mask_path,
-                  -1)
+    # mask = tifffile.imread(mask_path,
+    #               -1)
+
+    mask = tifffile.imread(mask_path)
 
     image = imread(og_img_path,
                    -1)
 
-    # separating contours before binarizing mask
-    max_intensity = mask.max()  # noqa
+    # getting intensity range to
+    # separate contours before binarizing mask
+    valid_pixint_list = get_unique_ids(mask)
+
+    # max_intensity = mask.max()  # noqa
 
     # getting shape for new masks arrays
     shape = mask.shape
@@ -277,7 +303,7 @@ def make_image_contours_df(mask_name: str,
     contours_df_list = []
 
     # loop not to join different contours
-    for pixel_intensity in range(1, max_intensity + 1):
+    for pixel_intensity in valid_pixint_list:
         # create a new blank img
         single_contour_img = np.zeros(shape)
 

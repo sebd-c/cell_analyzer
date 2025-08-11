@@ -26,6 +26,7 @@ def enhance_single_img(og_img_path: str,
     img = imread(og_img_path, IMREAD_GRAYSCALE)
 
     # create a CLAHE object (Arguments are optional).
+
     clahe = createCLAHE(clipLimit=3.0, tileGridSize=(2, 2))
     cl1 = clahe.apply(img)
 

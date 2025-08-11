@@ -465,7 +465,7 @@ def main():
     images_folder = args_dict['images_folder']
 
     # phase images folder
-    phase_folder = args_dict['phase_folder']
+    # phase_folder = args_dict['phase_folder']
 
     # getting images extension
     images_extension = args_dict['images_extension']

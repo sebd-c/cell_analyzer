@@ -234,7 +234,11 @@ def run_rf_model_senescence(input_path: str,
                                         special_characters=True)
 
         graph = pydotplus.graph_from_dot_data(dot_data)
-        graph.write_png('dtree' + str(index) + '.pdf')
+
+        tree_name = 'dtree' + str(index) + '.png'
+
+        graph.write_png(join(output_folder,
+                          tree_name))
 
 # # Counters
 # class_node_counts = {cls: 0 for cls in clf.classes_}
