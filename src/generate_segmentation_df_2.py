@@ -21,7 +21,10 @@ from cv2 import COLOR_BGR2RGB
 from cv2 import cvtColor
 from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
+from cv2 import RETR_LIST
+from cv2 import RETR_FLOODFILL
 from numpy import uint8 as np_uint8
+from numpy import uint32 as np_uint32
 from numpy import ndarray
 from pandas import concat
 from pandas import DataFrame
@@ -32,6 +35,7 @@ from numpy import mean
 from numpy import median
 from numpy import sum
 from numpy import unique
+from numpy import isin
 import tifffile
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
@@ -74,7 +78,13 @@ def get_parameters_df(contour: ndarray,
 
     # getting current contour area
     area = contourArea(contour)
+    print(area)
 
+    # if pixel_int ==12:
+    #     print(area)
+    #     flag = np.isin(single_contour_img, 1)
+    #     print(unique(flag))
+    #     exit()
     # TODO: check why this is happening and if unavoidable, put in argparser
     if area > 10:
 
@@ -225,9 +235,17 @@ def process_contour_phase(single_contour_img: ndarray,
     # converting int type
     single_contour_img = single_contour_img.astype(np_uint8)
 
+    flattened_contour_img = single_contour_img.flatten()
+    unique_val, counts = unique(flattened_contour_img, return_counts=True)
+    print(dict(zip(unique_val, counts)))
     # finding contour in image
-    contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+    contour, _ = findContours(single_contour_img, RETR_FLOODFILL, CHAIN_APPROX_NONE)
 
+    # if not len(contour[0]):
+    #     print(pixint)
+    #     exit()
+    # print(contour[0])
+    # exit()
     single_contour_df = get_parameters_df(contour=contour[0],
                                           pixel_int=pixint,
                                           mask_name=mask_name,
@@ -319,6 +337,10 @@ def make_image_contours_df(mask_name: str,
 
         # putting the contour inside
         single_contour_img[mask == pixel_intensity] = 1
+
+        flattened_contour_img = single_contour_img.flatten()
+        unique_val, counts = unique(flattened_contour_img, return_counts=True)
+        print(dict(zip(unique_val, counts)))
 
         # choose which way the function should be continued
         # if the parameter for phase was set,
