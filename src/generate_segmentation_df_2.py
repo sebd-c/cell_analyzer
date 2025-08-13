@@ -23,6 +23,7 @@ from cv2 import CHAIN_APPROX_NONE
 from cv2 import RETR_EXTERNAL
 from cv2 import RETR_LIST
 from cv2 import RETR_FLOODFILL
+from skimage.measure import find_contours
 from numpy import uint8 as np_uint8
 from numpy import uint32 as np_uint32
 from numpy import ndarray
@@ -47,6 +48,10 @@ from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import make_contour_label
+from src.utils.aux_funcs import get_unique_ids
+from src.utils.aux_funcs import get_coords
+from src.utils.aux_funcs import get_boundaries_mask
+
 
 print('all required libraries successfully imported.')  # noqa
 
@@ -184,28 +189,6 @@ def get_parameters_df(contour: ndarray,
     return contour_df
 
 
-def get_unique_ids(mask: ndarray) -> list:
-    """
-    Given an image of segmentation masks, returns
-    a list containing all object ids.
-    """
-    # getting current mask unique values
-    object_ids = unique(mask)
-
-    # converting ids to list
-    object_ids = object_ids.tolist()
-
-    if 0 in object_ids:
-        # removing zero from list (background pixel)
-        object_ids.remove(0)
-
-    # sorting list
-    object_ids = sorted(object_ids)
-
-    # returning object ids list
-    return object_ids
-
-
 def process_contour_phase(single_contour_img: ndarray,
                           mask_name: str,
                           pixint: float,
@@ -235,18 +218,21 @@ def process_contour_phase(single_contour_img: ndarray,
     # converting int type
     single_contour_img = single_contour_img.astype(np_uint8)
 
-    flattened_contour_img = single_contour_img.flatten()
-    unique_val, counts = unique(flattened_contour_img, return_counts=True)
-    print(dict(zip(unique_val, counts)))
     # finding contour in image
-    contour, _ = findContours(single_contour_img, RETR_FLOODFILL, CHAIN_APPROX_NONE)
+    # contour, _ = findContours(single_contour_img, RETR_FLOODFILL, CHAIN_APPROX_NONE)
+    # getting current objects boundaries masks
+    # boundaries_mask = get_boundaries_mask(mask=mask)
+    # object_coords = get_coords(mask=single_contour_img)
+
+    contour = find_contours(single_contour_img, 0.5)
+    print(len(contour))
 
     # if not len(contour[0]):
     #     print(pixint)
     #     exit()
     # print(contour[0])
     # exit()
-    single_contour_df = get_parameters_df(contour=contour[0],
+    single_contour_df = get_parameters_df(contour=contour,
                                           pixel_int=pixint,
                                           mask_name=mask_name,
                                           flag=1,
@@ -255,8 +241,8 @@ def process_contour_phase(single_contour_img: ndarray,
                                           phase_green_list=phase_green_intensity,
                                           phase_blue_list=phase_blue_intensity
                                           )
-    # rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
-    # single_contour_df.drop(rows_to_delete, inplace=True)
+    rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
+    single_contour_df.drop(rows_to_delete, inplace=True)
 
     # if not len(single_contour_df) == 0:
     #     # put label
@@ -278,7 +264,7 @@ def process_contour_phase(single_contour_img: ndarray,
                        color=255,
                        thickness=2,
                        img_to_label=image,
-                       contour=contour[0],
+                       contour=contour,
                        )
 
     # returns the contours and the list of intensities
