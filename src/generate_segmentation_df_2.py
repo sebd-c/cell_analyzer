@@ -30,6 +30,8 @@ from cv2 import dilate
 from skimage.measure import label
 from skimage.morphology import diameter_opening
 from skimage.morphology import diameter_closing
+from skimage.morphology import remove_small_holes
+from skimage.morphology import remove_small_objects
 from skimage.measure import find_contours
 from numpy import uint8 as np_uint8
 from numpy import uint32 as np_uint32
@@ -205,7 +207,7 @@ def process_contour_phase(single_contour_img: ndarray,
                           phase_blue: ndarray
                           ) -> DataFrame:
     """
-    :param og_phase:
+    Given an array of a single contour
     :param pixint:
     :param mask_name:
     :param single_contour_img:
@@ -216,28 +218,21 @@ def process_contour_phase(single_contour_img: ndarray,
     :return:
     """
 
-    # getting pixel intensity for each channel
+    # getting pixel intensities for each channel
     phase_red_intensity = phase_red[single_contour_img == 1]
     phase_green_intensity = phase_green[single_contour_img == 1]
     phase_blue_intensity = phase_blue[single_contour_img == 1]
     og_intensity = image[single_contour_img == 1]
 
+    # transforming it in list formatting
+    # phase_red_intensity = phase_red_intensity.flatten()
+    # phase_green_intensity = phase_green_intensity.flatten()
+    # phase_blue_intensity = phase_blue_intensity.flatten()
+    # og_intensity = og_intensity.flatten()
+
     # converting int type
     single_contour_img = single_contour_img.astype(np_uint8)
 
-    # # define kernel for morphological operations
-    # kernel = np.ones((7, 7), np_uint8)
-    #
-    # # opening and closing for object accuracy
-    # # closing
-    # single_contour_img = morphologyEx(single_contour_img, MORPH_CLOSE, kernel)
-    #
-    # # opening
-    # single_contour_img = morphologyEx(single_contour_img, MORPH_OPEN, kernel)
-
-    # from PIL import Image
-    # im = Image.fromarray(single_contour_img)
-    # im.save("your_file.jpeg")
     # finding contour in image
     contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
 
@@ -305,47 +300,39 @@ def make_image_contours_df(mask_name: str,
     # separate channels
     phase_red, phase_green, phase_blue = split(phase_image)
 
-    # reading mask and image
-    # mask = imread(mask_path,
-    #               -1)
-
-    mask = tifffile.imread(mask_path)
-
-    # make it uint8 for morphological operations
-    mask = mask.astype(np_uint8)
-
-    # relabel img as to separate lose pixels
-    mask = label(mask)
-
-    # define kernel for morphological operations
-    # kernel_dilation =
-    kernel_opening = np.ones((5, 5), np_uint8)
-    # kernel_closing = np.ones((3, 3), np_uint8)
-    kernel = np.ones((3, 3), np_uint8)
-
-    # cv2 operations
-    #TODO: invert operations order
-    mask = dilate(mask, kernel, iterations=1)
-    # opening and closing for object accuracy
-    # opening
-    mask = morphologyEx(mask, MORPH_OPEN, kernel_opening)
-
-    # closing
-    # mask = morphologyEx(mask, MORPH_CLOSE, kernel)
-
-    #skimage operations
-    # opening
-    mask = diameter_opening(mask)
-
-
-
-
-
-    overlays_output_path = join(overlays_output_folder, mask_name)
-    imwrite(overlays_output_path, mask)
-    exit()
+    # reading grayscale image
     image = imread(og_img_path,
                    -1)
+
+    # reading mask
+    mask = tifffile.imread(mask_path)
+
+    # relabel img as to separate loose pixels
+    mask = label(mask)
+
+    # # make it uint8 for morphological operations
+    mask = mask.astype(np_uint8)
+
+    # define kernel for morphological operations
+    kernel = np.ones((3, 3), np_uint8)
+
+    # remove small objects
+    mask = remove_small_objects(mask)
+
+    # close small holes (same library was not used for need of int types instead of booleans)
+    mask = morphologyEx(mask, MORPH_CLOSE, kernel)
+
+    # flattened_contour_img = mask.flatten()
+    # unique_val, counts = unique(flattened_contour_img, return_counts=True)
+    # print(dict(zip(unique_val, counts)))
+    # exit()
+    # print(type(mask))
+    # exit()
+
+    # test output
+    # overlays_output_path = join(overlays_output_folder, mask_name)
+    # imwrite(overlays_output_path, mask)
+    # exit()
 
     # getting intensity range to
     # separate contours before binarizing mask
@@ -457,7 +444,7 @@ def make_folder_contours_df(masks_input_folder: str,
         phase_img_input_path = join(phase_img_folder,
                                     phase_file
                                     )
-        # get image contour df and respective overlayed imgs
+        # get image contour df and respective overlay-ed imgs
         image_df = make_image_contours_df(mask_name=mask_file,
                                           mask_path=mask_input_path,
                                           og_img_path=og_img_input_path,
@@ -468,7 +455,7 @@ def make_folder_contours_df(masks_input_folder: str,
         # append curr img df to dir df
         dfs_list.append(image_df)
 
-    # concating "dfs" from dfs lists into
+    # concatenating "dfs" from dfs lists into
     # a pandas dataframe
     contour_df = concat(dfs_list, ignore_index=True)
 
@@ -542,7 +529,7 @@ def get_args_dict() -> dict:
     # parser.add_argument('-st', '--segmentation_type',
     #                     dest='segmentation_type',
     #                     required=True,
-    #                     help='defines wich type of segmentation it is. "nuc" or "cyto"')
+    #                     help='defines which type of segmentation it is. "nuc" or "cyto"')
 
     # creating arguments dictionary
     args_dict = vars(parser.parse_args())
