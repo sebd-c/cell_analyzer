@@ -10,6 +10,8 @@
 # importing required libraries
 from copy import copy
 from os import listdir
+from os import mkdir
+from os.path import join
 from sys import stdout
 from numpy import ndarray
 from cv2 import moments
@@ -650,7 +652,7 @@ def get_distance(point_o: tuple, point_d: tuple) -> float:
 
 def get_contour_rratio(contour: ndarray, origin: tuple) -> float:
     """
-    given a countour,
+    given a contour,
     gets its max and min
     distance from the centroid
     to the contour surface,
@@ -861,7 +863,40 @@ def save_img_outlayers(overlays_output_folder: str,
 
     return
 
+def make_dir_list(class_list: str,
+                  output_folder: str
+                  ) -> dict:
 
+    """
+    Given a list of strings,
+    makes a directory with the name of each of them
+    in a specified folder and returns
+    a dict with folder name and path
+    """
+    # empty list to save names
+    output_path_list = []
+
+    # empty dict to save
+    output_path_dict = {}
+
+    # make a loop to create directories
+    for class_name in class_list:
+        # define class path
+        class_path = join(output_folder, class_name)
+
+        # make directory
+        mkdir(class_path)
+
+        # append list of directories
+        output_path_list.append(class_path)
+
+        # organize in dict
+        dict_line = {class_name: class_path}
+
+        output_path_dict.update(dict_line)
+        #update dict
+
+    return output_path_dict
 
 
 
