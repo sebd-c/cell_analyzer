@@ -14,12 +14,9 @@ print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
 from cv2 import imread
 from cv2 import imwrite
-from pandas import concat
 from pandas import DataFrame
 from pandas import read_pickle
 from os.path import join
-from os import mkdir
-from src.utils.merge_channels import merge_multiple_images
 from src.utils.aux_funcs import make_dir_list
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
@@ -202,15 +199,12 @@ def main():
     # enter_to_continue()
     output_path_dict = make_dir_list(class_list=class_list,
                                      output_folder=output_folder)
-    # runnning join
-    make_cytnuc_output(cyt_csv_input_path=cyto_input_csv,
-                       nuc_csv_input_path=nuc_input_csv,
-                       nuc_overlayed_input_folder=nuc_images_folder,
-                       cyto_overlayed_input_folder=cyto_images_folder,
-                       img_extension=images_extension,
-                       csv_output_folder=csv_output_folder,
-                       joined_overlays_output_folder=overlays_output_folder,
-                       )
+    # runnning
+    organize_crops_folder(images_input_folder=images_folder,
+                          image_extension=images_extension,
+                          df_path=df_path,
+                          output_path_dict=output_path_dict
+                          )
 
 
 ######################################################################
