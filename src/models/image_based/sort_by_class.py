@@ -12,7 +12,8 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
-from cv2 import pointPolygonTest
+from cv2 import imread
+from cv2 import imwrite
 from pandas import concat
 from pandas import DataFrame
 from pandas import read_pickle
@@ -31,169 +32,49 @@ print('all required libraries successfully imported.')  # noqa
 # module specific aux functions
 
 def organize_crop(crop_path: str,
+                  crop_name: str,
                   df: DataFrame,
-                  output_path_list: list
+                  output_path_dict: dict
                   ) -> None:
     """
     given an object crop,
-    and a df containing its id, origin img and label
+    and a df containing its id, origin img and label,
+    a dict of folder name and path,
     creates a copy of the crop img into designated folder
     """
 
-    # make a list as placeholder while making new linked df
-    linked_dfs_list = []
+    # reading crop image
+    crop = imread(crop_path,
+                   -1)
 
+    # label dict for translation from df to directory name
     label_dict = {0: 'normal', 1: 'quiescent', 2: 'fully_senescent', 3: 'senescent_like'}
 
-    # class names
-    class_names = ['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+    # refactor df
+    df['label'] = df['label'].replace(label_dict)
 
-    # change image names so they match
-    cyt_df['image_name'] = cyt_df['image_name'].replace('green', '', regex=True)
-    nuc_df['image_name'] = nuc_df['image_name'].replace('red', '', regex=True)
+    # create crop name split for identification in df
+    crop_name_split = crop_name.split('_')
 
-    # loop of nucleus through the cytoplasm df
-    for nucleus_index, nuc_row in nuc_df.iterrows():
+    # identify crop in df to get label
+    crop_row = df[(df['contour_index'] == crop_name_split[0]) & (df['image_name'] == crop_name_split[1])]
 
-        # conditional to loop only in the cytoplasms
-        # that have matching img name as the nucleus
-        cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_row['image_name']]
+    # getting crop label
+    crop_label = crop_row['label']
 
-        for cyto_index, cyto_row in cyt_df_img.iterrows():
-            # remember to put the contour into the df
-            # when saved in a csv, the contour turns into string
-            cyto_contour = cyto_row['contour']
+    # getting output path
+    crop_output_path = output_path_dict[crop_label]
 
-            # str_unextracted_cyto = string_to_contours_array(input_string=str_unextracted_cyto)
+    # save in specified dir
+    imwrite(crop_output_path, crop)
 
-            # # we adapted it with a surplus of brackets
-            # # before proceeding, you need to remove that surplus of brackets
-            # # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
-            # front = str_unextracted_cyto.find('[')
-            # str_unextracted_cyto = str_unextracted_cyto[:front] + str_unextracted_cyto[front + 1:]
-            # rear = str_unextracted_cyto.rfind(']')
-            # str_unextracted_cyto = str_unextracted_cyto[:rear] + str_unextracted_cyto[rear + 1:]
-            #
-            # # after having adapt the string to array, we can proceed
-            # unextracted_cyto = array(str_unextracted_cyto)
-            # extracted_cyto = UMat(unextracted_cyto)
-
-            # now use this cv2 function to
-            # test if a point is inside an object
-            if pointPolygonTest(cyto_contour,
-                                # if it is, it'll be a match parent cytoplasm
-                                # measureDist 0 or 1
-                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
-                                measureDist=False) > -1:
-                # if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
-                # if the nucleus is nested in the contour,
-
-                # having the tested pointed out it's a parent,
-                # begin making a row for the new joint df
-                linked_dict = {'image_name': cyto_row['image_name'],
-                               'cyto_id': cyto_row['contour_index'],
-                               'cyto_cx': cyto_row['cx_coords'],
-                               'cyto_cy': cyto_row['cy_coords'],
-                               'cyto_area': cyto_row['area'],
-                               'cyto_arbox': cyto_row['area_box'],
-                               'cyto_radra': cyto_row['radius_ratio'],
-                               'cyto_asp': cyto_row['aspect'],
-                               'cyto_ecc': cyto_row['eccentricity'],
-                               'cyto_rou': cyto_row['roundness'],
-                               'cii': cyto_row['ii'],
-                               'cyto_grayscale_mean': cyto_row['grayscale_mean'],
-                               'cyto_grayscale_median': cyto_row['grayscale_median'],
-                               'cyto_grayscale_max': cyto_row['grayscale_max'],
-                               'cyto_grayscale_min':cyto_row['grayscale_min'],
-                               'cyto_grayscale_sum': cyto_row['grayscale_sum'],
-                               'cyto_grayscale_int_density': cyto_row['grayscale_int_density'],
-                               'cyto_red_mean': cyto_row['red_mean'],
-                               'cyto_red_median': cyto_row['red_median'],
-                               'cyto_red_max': cyto_row['red_max'],
-                               'cyto_red_min': cyto_row['red_min'],
-                               'cyto_red_sum': cyto_row['red_sum'],
-                               'cyto_red_int_density': cyto_row['red_int_density'],
-                               'cyto_green_mean': cyto_row['green_mean'],
-                               'cyto_green_median': cyto_row['green_median'],
-                               'cyto_green_max': cyto_row['green_max'],
-                               'cyto_green_min': cyto_row['green_min'],
-                               'cyto_green_sum': cyto_row['green_sum'],
-                               'cyto_green_int_density': cyto_row['green_int_density'],
-                               'cyto_blue_mean': cyto_row['blue_mean'],
-                               'cyto_blue_median': cyto_row['blue_median'],
-                               'cyto_blue_max': cyto_row['blue_max'],
-                               'cyto_blue_min': cyto_row['blue_min'],
-                               'cyto_blue_sum': cyto_row['blue_sum'],
-                               'cyto_blue_int_density': cyto_row['blue_int_density'],
-                               'nuc_id': nuc_row['contour_index'],
-                               'nuc_cx': nuc_row['cx_coords'],
-                               'nuc_cy': nuc_row['cy_coords'],
-                               'nuc_area': nuc_row['area'],
-                               'nuc_arbox': nuc_row['area_box'],
-                               'nuc_radra': nuc_row['radius_ratio'],
-                               'nuc_asp': nuc_row['aspect'],
-                               'nuc_ecc': nuc_row['eccentricity'],
-                               'nuc_rou': nuc_row['roundness'],
-                               'nii': nuc_row['ii'],
-                               'nuc_grayscale_mean': nuc_row['grayscale_mean'],
-                               'nuc_grayscale_median': nuc_row['grayscale_median'],
-                               'nuc_grayscale_max': nuc_row['grayscale_max'],
-                               'nuc_grayscale_min': nuc_row['grayscale_min'],
-                               'nuc_grayscale_sum': nuc_row['grayscale_sum'],
-                               'nuc_grayscale_int_density': nuc_row['grayscale_int_density'],
-                               'nuc_red_mean': nuc_row['red_mean'],
-                               'nuc_red_median': nuc_row['red_median'],
-                               'nuc_red_max': nuc_row['red_max'],
-                               'nuc_red_min': nuc_row['red_min'],
-                               'nuc_red_sum': nuc_row['red_sum'],
-                               'nuc_red_int_density': nuc_row['red_int_density'],
-                               'nuc_green_mean': nuc_row['green_mean'],
-                               'nuc_green_median': nuc_row['green_median'],
-                               'nuc_green_max': nuc_row['green_max'],
-                               'nuc_green_min': nuc_row['green_min'],
-                               'nuc_green_sum': nuc_row['green_sum'],
-                               'nuc_green_int_density': nuc_row['green_int_density'],
-                               'nuc_blue_mean': nuc_row['blue_mean'],
-                               'nuc_blue_median': nuc_row['blue_median'],
-                               'nuc_blue_max': nuc_row['blue_max'],
-                               'nuc_blue_min': nuc_row['blue_min'],
-                               'nuc_blue_sum': nuc_row['blue_sum'],
-                               'nuc_blue_int_density': nuc_row['blue_int_density']
-                               # 'xgal_e': cyto_row['xgal_e'],
-                               # 'xgal_d': cyto_row['xgal_d'],
-                               # 'xgal_h': cyto_row['xgal_h'],
-                               # 's_status_e': cyto_row['s_status_e'],
-                               # 's_status_d': cyto_row['s_status_d'],
-                               # 's_status_h': cyto_row['s_status_h'],
-                               # 'cons_xgal': cyto_row['cons_xgal'],
-                               # 'cons_sstatus': cyto_row['cons_sstatus'],
-                               # 'label': cyto_row['label']
-                               }
-
-                # make the new dictionary into a temporary one row df
-                linked_df = DataFrame(linked_dict, index=[0])
-
-                # append the newly made df into a list
-                linked_dfs_list.append(linked_df)
-
-                # since you found the parent cytoplasm,
-                # you need to break the loop to move into the other nuclei
-                break
-
-    # concating contour df into bigger df
-    # a pandas dataframe
-    concat_linked_df = concat(linked_dfs_list, ignore_index=True)
-
-    # saving new df
-    concat_linked_df.to_pickle(output_path)
-
-    return concat_linked_df
+    return
 
 
 def organize_crops_folder(images_input_folder: str,
                           image_extension: str,
                           df_path: str,
-                          output_folder: list,
+                          output_path_dict: dict,
                           ) -> None:
     """
     Given a path to a folder containing
@@ -225,15 +106,12 @@ def organize_crops_folder(images_input_folder: str,
                                 crop_file)
 
         # evaluate class by crop
-        make_image_crops(image_path=image_input_path,
-                         image_name=image_file,
-                         df=df,
-                         max_width=max_width,
-                         max_height=max_height,
-                         output_folder=output_folder)
+        organize_crop(crop_path=image_input_path,
+                      crop_name=crop_file,
+                      df=df,
+                      output_path_dict=output_path_dict)
 
     # printing execution message
-    print(f'output saved to {output_folder}')
     print('analysis complete!')
 
     return
@@ -322,7 +200,7 @@ def main():
 
     # waiting for user input
     # enter_to_continue()
-    output_path_list = make_dir_list(class_list=class_list,
+    output_path_dict = make_dir_list(class_list=class_list,
                                      output_folder=output_folder)
     # runnning join
     make_cytnuc_output(cyt_csv_input_path=cyto_input_csv,
