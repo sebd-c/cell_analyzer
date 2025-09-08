@@ -54,6 +54,93 @@ print('all required libraries successfully imported.')  # noqa
 #####################################################################
 
 # module specific aux functions
+
+def get_nuc_contours(df: DataFrame,
+                     cyto_id: str,
+                     image_name: str
+                     ) -> list:
+
+    """
+    Given a dataframe of cyt/nuc objects,
+    a cyto id and an image name, returns a list of
+    all that objects nuclei
+    """
+
+    image_df = df[(df['cyto_id'] == cyto_id) & (df['image_name'] == image_name)]
+
+    pass
+
+
+def make_cyto_crops(image_path: str,
+                    cyto_id: str,
+                    df: DataFrame,
+                    max_width: int or float,
+                    max_height: int or float,
+                    output_folder: str
+                    ) -> None:
+    """
+        Given a path to a grayscale image,
+        a dataframe containing each object's centroid,
+        id, origin image and contour,
+        generates crops of all of that image's objects,
+        and saves the results in the output folder.
+        """
+
+    # reading grayscale image
+    image = imread(image_path,
+                   -1)
+
+    # define a pixel intensity
+    pixel_intensity = 255
+
+    # getting img shape
+    shape = image.shape
+
+    # segment the df to loop only on this cytoplasm's objects
+    cyto_df = df[df['cyto_id'] == cyto_id]
+
+    # creates mask to hold contour
+    mask = np.zeros(shape, dtype=np.uint8)
+
+    # loop not to join different contours
+    for index, row in cyto_df.iterrows():
+        # noise cleaning process outside object
+        # filling mask image
+        drawContours(mask, row['contour'], 0, pixel_intensity, -1)
+
+    # apply mask to make clean image
+    clean_image = image[mask != pixel_intensity] = 0
+
+    # flipping conditional
+    _, _, w, h = boundingRect(row['contour'])
+
+    # if the object is in another rotation, flip it
+    if w > h:
+        cropping_image = rotate(clean_image, ROTATE_90_CLOCKWISE)
+    else:
+        cropping_image = clean_image
+
+    # vertex settings per object
+    x1 = row['cx_coords'].iloc[0] - max_width / 2
+    x2 = row['cx_coords'].iloc[0] + max_width / 2
+    y1 = row['cy_coords'].iloc[0] - max_height / 2
+    y2 = row['cy_coords'].iloc[0] + max_height / 2
+
+    # image cropping
+    crop = cropping_image[y1:y2, x1:x2]
+
+    # making crop name for saving
+    crop_name = row['contour_index'] + '_' + cyto_id
+
+    # defining crop output path
+    crop_output_path = join(output_folder, crop_name)
+
+        # saving crop
+        imwrite(crop_output_path, crop)
+
+    return
+
+
 def make_image_crops(image_path: str,
                      image_name: str,
                      df: DataFrame,

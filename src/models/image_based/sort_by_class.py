@@ -27,7 +27,7 @@ print('all required libraries successfully imported.')  # noqa
 
 #####################################################################
 # module specific aux functions
-
+#TODO: modify the names so the accepted df is the final one
 def organize_crop(crop_path: str,
                   crop_name: str,
                   df: DataFrame,
