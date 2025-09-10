@@ -146,8 +146,8 @@ def make_cyto_crops(image_path: str,
     # defining crop output path
     crop_output_path = join(output_folder, crop_name)
 
-        # saving crop
-        imwrite(crop_output_path, crop)
+    # saving crop
+    imwrite(crop_output_path, crop)
 
     return
 
