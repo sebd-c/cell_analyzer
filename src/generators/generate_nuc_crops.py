@@ -18,6 +18,7 @@ from cv2 import drawContours
 from cv2 import split
 from cv2 import imwrite
 from cv2 import rotate
+from cv2 import convexHull
 from cv2 import ROTATE_90_CLOCKWISE
 from cv2 import ROTATE_90_COUNTERCLOCKWISE
 from numpy import uint8 as np_uint8
@@ -32,6 +33,7 @@ from numpy import median
 from numpy import sum
 from numpy import unique
 from numpy import isin
+from numpy import vstack
 import tifffile
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
@@ -111,8 +113,17 @@ def make_cyto_crops(image_path: str,
     # apply mask to make clean image
     clean_image = image[mask != pixel_intensity] = 0
 
-    # flipping conditional
-    _, _, w, h = boundingRect(row['contour'])
+    # se n funcionar o vstack da series dá de botar no loop
+    # cont = vstack(contours[i] for i in range(length))
+    joined_contour = vstack(cyto_df['contour'])
+    hull = convexHull(joined_contour)
+
+    # n tenho ctz pq teria q fzr isso acho q tem q fzr testes
+    # uni_hull = []
+    # uni_hull.append(hull)
+
+    # get bounding rect
+    _, _, w, h = boundingRect(hull)
 
     # if the object is in another rotation, flip it
     if w > h:

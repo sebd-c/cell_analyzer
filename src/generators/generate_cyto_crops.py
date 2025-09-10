@@ -22,6 +22,7 @@ from cv2 import ROTATE_90_CLOCKWISE
 from cv2 import ROTATE_90_COUNTERCLOCKWISE
 from numpy import uint8 as np_uint8
 from numpy import ndarray
+from numpy import pad
 from pandas import concat, read_pickle
 from pandas import DataFrame
 from os.path import join
@@ -99,19 +100,35 @@ def make_image_crops(image_path: str,
 
         # if the object is in another rotation, flip it
         if w > h:
-            cropping_image = rotate(clean_image, ROTATE_90_CLOCKWISE)
+
+            # vertex settings per object
+            x1 = row['cx_coords'].iloc[0] - max_height / 2
+            x2 = row['cx_coords'].iloc[0] + max_height / 2
+            y1 = row['cy_coords'].iloc[0] - max_width / 2
+            y2 = row['cy_coords'].iloc[0] + max_width / 2
+
+            # image cropping
+            crop = clean_image[y1:y2, x1:x2]
+
+            # fix crop orientation
+            oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
+
         else:
-            cropping_image = clean_image
 
-        # vertex settings per object
-        x1 = row['cx_coords'].iloc[0] - max_width/2
-        x2 = row['cx_coords'].iloc[0] + max_width/2
-        y1 = row['cy_coords'].iloc[0] - max_height/2
-        y2 = row['cy_coords'].iloc[0] + max_height/2
+            # vertex settings per object
+            x1 = row['cx_coords'].iloc[0] - max_width / 2
+            x2 = row['cx_coords'].iloc[0] + max_width / 2
+            y1 = row['cy_coords'].iloc[0] - max_height / 2
+            y2 = row['cy_coords'].iloc[0] + max_height / 2
 
+            # image cropping
+            crop = clean_image[y1:y2, x1:x2]
 
-        # image cropping
-        crop = cropping_image[y1:y2, x1:x2]
+            # fix crop orientation
+            oriented_crop = crop
+
+        # add padding
+        pad(oriented_crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
 
         # making crop name for saving
         crop_name = row['cyto_id'] + '_' + image_name
@@ -120,7 +137,7 @@ def make_image_crops(image_path: str,
         crop_output_path = join(output_folder, crop_name)
 
         # saving crop
-        imwrite(crop_output_path, crop)
+        imwrite(crop_output_path, oriented_crop)
 
     return
 

@@ -54,7 +54,7 @@ def organize_crop(crop_path: str,
     crop_name_split = crop_name.split('_')
 
     # identify crop in df to get label
-    crop_row = df[(df['contour_index'] == crop_name_split[0]) & (df['image_name'] == crop_name_split[1])]
+    crop_row = df[(df['cyto_id'] == crop_name_split[0]) & (df['image_name'] == crop_name_split[1])]
 
     # getting crop label
     crop_label = crop_row['label']
