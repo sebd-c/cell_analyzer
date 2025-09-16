@@ -181,11 +181,14 @@ def main():
     # getting data from Argument Parser
     args_dict = get_args_dict()
 
-    # getting red images folder param
-    red_folder = args_dict['red_folder']
+    # getting nuclei images folder param
+    nuclei_folder = args_dict['nuclei_folder']
+
+    # getting nuclei binary masks folder param
+    masks_folder = args_dict['masks_folder']
 
     # getting green images folder param
-    green_folder = args_dict['green_folder']
+    cyto_folder = args_dict['cyto_folder']
 
     # getting output images folder param
     output_folder = args_dict['output_folder']
@@ -200,8 +203,8 @@ def main():
 
     # running merge_channels function
     merge_multiple_images(output_folder=output_folder,
-                          nuclei_folder=red_folder,
-                          cyto_folder=green_folder,
+                          nuclei_folder=nuclei_folder,
+                          cyto_folder=cyto_folder,
                           img_extension='.tif')
 
 
