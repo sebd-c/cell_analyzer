@@ -25,6 +25,9 @@ from cv2 import drawContours
 from math import sqrt
 from cv2 import fitEllipse
 from cv2 import arcLength
+from cv2 import rotate
+from cv2 import ROTATE_90_CLOCKWISE
+from numpy import pad
 from math import pi
 from pandas import DataFrame
 from skimage.feature import graycomatrix, graycoprops
@@ -851,15 +854,18 @@ def make_contour_label(contour_index: int,
                  thickness)
 
 
-def save_img_outlayers(overlays_output_folder: str,
-                       mask_name: str,
-                       img_to_label: ndarray
-                       ) -> None:
+def save_img(output_folder: str,
+             file_name: str,
+             img_to_save: ndarray
+             ) -> None:
     """
-    saves already labeled images in designated directory
+    saves image in designated directory
     """
-    overlays_output_path = join(overlays_output_folder, mask_name)
-    imwrite(overlays_output_path, img_to_label)
+    # make output path
+    output_path = join(output_folder, file_name)
+
+    # save image
+    imwrite(output_path, img_to_save)
 
     return
 
@@ -898,6 +904,63 @@ def make_dir_list(class_list: str,
 
     return output_path_dict
 
+
+def apply_mask(image: ndarray,
+               mask: ndarray,
+               pixel_intensity: int
+               ) -> ndarray:
+    """
+    Given an image, a mask image and a pixel intensity for a labeled object,
+    returns a copy of the image with all pixels outside the labeled object as 0
+    """
+    # make a copy of the image not to alter it
+    masked_image = copy(image)
+
+    # apply mask to it
+    masked_image[mask != pixel_intensity] = 0
+
+    return masked_image
+
+
+def make_crop(image: ndarray,
+               x1: int or float,
+               x2: int or float,
+               y1: int or float,
+               y2: int or float,
+               ) -> ndarray:
+    """
+    Given an image and 4 points in space,
+    returns an unoriented crop image
+    """
+    # crop based on coordinates
+    crop = image[y1:y2, x1:x2]
+
+    # make some padding so that no object touches the border
+    pad(crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
+
+    return crop
+
+
+def make_crop_rotate(image: ndarray,
+               x1: int or float,
+               x2: int or float,
+               y1: int or float,
+               y2: int or float,
+               ) -> ndarray:
+    """
+    Given an image and 4 points in space,
+    returns an unoriented crop image
+    """
+    # crop based on coordinates
+    crop = image[y1:y2, x1:x2]
+
+    # rotate accordingly
+    oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
+
+    # make some padding
+    pad(oriented_crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
+
+    return oriented_crop
 
 
 

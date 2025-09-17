@@ -20,6 +20,7 @@ from cv2 import imwrite
 from cv2 import rotate
 from cv2 import ROTATE_90_CLOCKWISE
 from cv2 import ROTATE_90_COUNTERCLOCKWISE
+from copy import copy
 from numpy import uint8 as np_uint8
 from numpy import ndarray
 from numpy import pad
@@ -47,6 +48,10 @@ from src.utils.aux_funcs import make_contour_label
 from src.utils.aux_funcs import get_unique_ids
 from src.utils.aux_funcs import get_coords
 from src.utils.aux_funcs import get_boundaries_mask
+from src.utils.aux_funcs import apply_mask
+from src.utils.aux_funcs import make_crop
+from src.utils.aux_funcs import make_crop_rotate
+from src.utils.aux_funcs import save_img
 
 
 print('all required libraries successfully imported.')  # noqa
@@ -55,6 +60,72 @@ print('all required libraries successfully imported.')  # noqa
 #####################################################################
 
 # module specific aux functions
+def make_single_crop(image: ndarray,
+                     contour:ndarray,
+                     cx: int or float,
+                     cy: int or float,
+                     max_width: int or float,
+                     max_height: int or float
+                     ) -> ndarray:
+    """
+    Given an image, a contour, the contour's centroid (x, y),
+    and the supposed size of the crop,
+    returns a crop
+    """
+    # define a pixel intensity
+    pixel_intensity = 255
+
+    # getting img shape
+    shape = image.shape
+
+    # creates mask to hold cytoplasm contour
+    # for noise cleaning process outside object
+    mask = np.zeros(shape, dtype=np.uint8)
+
+    # filling mask image
+    drawContours(mask, contour, 0, pixel_intensity, -1)
+
+    # apply mask to make a clean image
+    clean_image = apply_mask(image=image,
+                             mask=mask,
+                             pixel_intensity=pixel_intensity)
+
+    # get object metrics for flipping conditional
+    _, _, w, h = boundingRect(contour)
+
+    # if the object is in another rotation, flip it
+    if w > h:
+
+        # vertex settings per object
+        x1 = cx - max_height / 2
+        x2 = cx + max_height / 2
+        y1 = cy - max_width / 2
+        y2 = cy + max_width / 2
+
+        # image cropping
+        crop = make_crop_rotate(image=clean_image,
+                                x1=x1,
+                                x2=x2,
+                                y1=y1,
+                                y2=y2)
+
+    else:
+
+        # vertex settings per object
+        x1 = cx - max_width / 2
+        x2 = cx + max_width / 2
+        y1 = cy - max_height / 2
+        y2 = cy + max_height / 2
+
+        # image cropping
+        crop = make_crop(image=clean_image,
+                         x1=x1,
+                         x2=x2,
+                         y1=y1,
+                         y2=y2)
+
+    return crop
+
 def make_image_crops(cyto_path: str,
                      nuc_path: str,
                      phase_path: str,
@@ -62,7 +133,9 @@ def make_image_crops(cyto_path: str,
                      df: DataFrame,
                      max_width: int or float,
                      max_height: int or float,
-                     output_folder: str
+                     cyto_output_folder: str,
+                     nuc_output_folder: str,
+                     phase_output_folder: str
                      ) -> None:
     """
     Given a path to a grayscale image,
@@ -84,88 +157,63 @@ def make_image_crops(cyto_path: str,
     phase_image = imread(phase_path,
                         -1)
 
-    # define a pixel intensity
-    pixel_intensity = 255
-
-    # getting img shape
-    shape = cyto_image.shape
+    # takeout channel from img name
+    image_name = image_name.replace('green', '', regex=True)
 
     # segment the df to loop only on this image's objects
     image_df = df[df['image_name'] == image_name]
 
-    # unique df
+    # since there are repeated cytoplasms, delete duplicates to make a unique df
     unique_df = image_df.drop_duplicates(subset=['image_name', 'cyto_id'], keep='first')
-
-    duplicated_cyto_df = image_df[image_df.duplicated(subset=['image_name', 'cyto_id'], keep=False)]
 
     # loop not to join different contours
     for index, row in unique_df.iterrows():
-        # noise cleaning process outside object
-        # creates mask to hold cytoplasm contour
-        cyto_mask = np.zeros(shape, dtype=np.uint8)
-
-        # filling mask image
-        drawContours(cyto_mask, row['cyto_contour'], 0, pixel_intensity, -1)
-
-        # creates mask to hold nucleus contour
-        nuc_mask = np.zeros(shape, dtype=np.uint8)
-
-        # checks if there is more than one nucleus
-        if (row[['image_name', 'cyto_id']] == duplicated_cyto_df[['image_name', 'cyto_id']]).all(axis=1).any():
-            # if so, get all nucleus to be considered
-            select_nucleus_df = duplicated_cyto_df[(duplicated_cyto_df['image_name'] == row['image_name']) & (duplicated_cyto_df['cyto_id'] == row['cyto_id'])]
-
-            # loop making contours
-            for nuc_index, nuc_row in select_nucleus_df.iterrows():
-                # filling mask image
-                drawContours(nuc_mask, row['nuc_contour'], 0, pixel_intensity, -1)
-
-        # apply mask to make clean image
-        clean_image = cyto_image[cyto_mask != pixel_intensity] = 0
-
-        # flipping conditional
-        _, _, w, h = boundingRect(row['contour'])
-
-        # if the object is in another rotation, flip it
-        if w > h:
-
-            # vertex settings per object
-            x1 = row['cx_coords'].iloc[0] - max_height / 2
-            x2 = row['cx_coords'].iloc[0] + max_height / 2
-            y1 = row['cy_coords'].iloc[0] - max_width / 2
-            y2 = row['cy_coords'].iloc[0] + max_width / 2
-
-            # image cropping
-            crop = clean_image[y1:y2, x1:x2]
-
-            # fix crop orientation
-            oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
-
-        else:
-
-            # vertex settings per object
-            x1 = row['cx_coords'].iloc[0] - max_width / 2
-            x2 = row['cx_coords'].iloc[0] + max_width / 2
-            y1 = row['cy_coords'].iloc[0] - max_height / 2
-            y2 = row['cy_coords'].iloc[0] + max_height / 2
-
-            # image cropping
-            crop = clean_image[y1:y2, x1:x2]
-
-            # fix crop orientation
-            oriented_crop = crop
-
-        # add padding
-        pad(oriented_crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
 
         # making crop name for saving
         crop_name = row['cyto_id'] + '_' + image_name
 
-        # defining crop output path
-        crop_output_path = join(output_folder, crop_name)
+        # naming df values
+        contour = row['cyto_contour']
+        cx = row['cyto_cx'].iloc[0]
+        cy = row['cyto_cy'].iloc[0]
 
-        # saving crop
-        imwrite(crop_output_path, oriented_crop)
+        # make crops
+        cyto_crop = make_single_crop(image=cyto_image,
+                                     contour=contour,
+                                     cx=cx,
+                                     cy=cy,
+                                     max_width=max_width,
+                                     max_height=max_height
+                                     )
+
+        nuc_crop = make_single_crop(image=nuc_image,
+                                    contour=contour,
+                                    cx=cx,
+                                    cy=cy,
+                                    max_width=max_width,
+                                    max_height=max_height
+                                    )
+
+        phase_crop = make_single_crop(image=phase_image,
+                                      contour=contour,
+                                      cx=cx,
+                                      cy=cy,
+                                      max_width=max_width,
+                                      max_height=max_height
+                                      )
+
+        # saving crops
+        save_img(output_folder=cyto_output_folder,
+                 file_name=crop_name,
+                 img_to_save=cyto_crop)
+
+        save_img(output_folder=nuc_output_folder,
+                 file_name=crop_name,
+                 img_to_save=nuc_crop)
+
+        save_img(output_folder=phase_output_folder,
+                 file_name=crop_name,
+                 img_to_save=phase_crop)
 
     return
 
@@ -175,7 +223,9 @@ def make_folder_crops(cyto_input_folder: str,
                       phase_input_folder: str,
                       image_extension: str,
                       df_path: str,
-                      output_folder: str,
+                      cyto_output_folder: str,
+                      nuc_output_folder: str,
+                      phase_output_folder: str
                       ) -> None:
     """
     Given a path to a folder containing
@@ -230,15 +280,15 @@ def make_folder_crops(cyto_input_folder: str,
                                index=file_index,
                                total=image_files_num)
 
-        # getting current image mask input/output paths
-        cyto_input_path = join(cyto_input_folder,
-                                cyto_file)
-
-        # getting respective og img
+        # getting respective nuc file
         nuc_file = nuc_files[file_index - 1]
 
-        # getting respective phase img
+        # getting respective phase file
         phase_file = phase_files[file_index - 1]
+
+        # making current cytoplasm img input path
+        cyto_input_path = join(cyto_input_folder,
+                               cyto_file)
 
         # analogous getting current og image input/output paths
         nuc_input_path = join(nuc_input_folder,
@@ -246,7 +296,7 @@ def make_folder_crops(cyto_input_folder: str,
 
         # analogous getting current og image input/output paths
         phase_input_path = join(phase_input_folder,
-                                    phase_file)
+                                phase_file)
 
         # make and save image crops
         make_image_crops(cyto_path=cyto_input_path,
@@ -256,10 +306,12 @@ def make_folder_crops(cyto_input_folder: str,
                          df=df,
                          max_width=max_width,
                          max_height=max_height,
-                         output_folder=output_folder)
+                         cyto_output_folder=cyto_output_folder,
+                         nuc_output_folder=nuc_output_folder,
+                         phase_output_folder=phase_output_folder)
 
     # printing execution message
-    print(f'output saved to {output_folder}')
+    print(f'output saved to {cyto_output_folder}')
     print('analysis complete!')
 
     return
@@ -346,13 +398,13 @@ def main():
     # getting args dict
     args_dict = get_args_dict()
 
-    # getting cytoplasm folder
+    # getting cytoplasm input folder
     cyto_folder = args_dict['cyto_folder']
 
-    # getting nuclei folder
+    # getting nuclei input folder
     nuclei_folder = args_dict['nuclei_folder']
 
-    # getting cytoplasm folder
+    # getting phase input folder
     phase_folder = args_dict['phase_folder']
 
     # path to segmentation dataframe
@@ -361,11 +413,14 @@ def main():
     # getting images extension
     images_extension = args_dict['images_extension']
 
-    # getting output folder
-    output_folder = args_dict['output_folder']
+    # getting cytoplasm output folder
+    cyto_output_folder = args_dict['cyto_output_folder']
 
-    # # getting type of segmentation
-    # segmentation_type = args_dict['segmentation_type']
+    # getting nuclei output folder
+    nuclei_output_folder = args_dict['nuclei_output_folder']
+
+    # getting phase output folder
+    phase_output_folder = args_dict['phase_output_folder']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
@@ -376,7 +431,7 @@ def main():
     make_folder_crops(cyto_input_folder=cyto_folder,
                       image_extension=images_extension,
                       df_path=df_path,
-                      output_folder=output_folder,
+                      cyto_output_folder=output_folder,
                       )
 
 
