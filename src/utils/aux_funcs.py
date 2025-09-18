@@ -27,6 +27,7 @@ from cv2 import fitEllipse
 from cv2 import arcLength
 from cv2 import rotate
 from cv2 import ROTATE_90_CLOCKWISE
+from cv2 import BORDER_CONSTANT
 from numpy import pad
 from math import pi
 from pandas import DataFrame
@@ -923,10 +924,12 @@ def apply_mask(image: ndarray,
 
 
 def make_crop(image: ndarray,
-               x1: int or float,
-               x2: int or float,
-               y1: int or float,
-               y2: int or float,
+              x1: int or float,
+              x2: int or float,
+              y1: int or float,
+              y2: int or float,
+              max_width: int or float,
+              max_height: int or float
                ) -> ndarray:
     """
     Given an image and 4 points in space,
@@ -935,6 +938,21 @@ def make_crop(image: ndarray,
     # crop based on coordinates
     crop = image[y1:y2, x1:x2]
 
+    # get crop current size for padding
+    crop_h, crop_w = crop.shape[:2]
+
+    # pad if crop is smaller than desired
+    pad_h = max_height - crop_h
+    pad_w = max_width - crop_w
+
+    top = pad_h // 2
+    bottom = pad_h - top
+    left = pad_w // 2
+    right = pad_w - left
+
+    crop_padded = cv2.copyMakeBorder(crop, top, bottom, left, right,
+                                     borderType=cv2.BORDER_CONSTANT,
+                                     value=pad_value)
     # make some padding so that no object touches the border
     pad(crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
 
@@ -942,11 +960,13 @@ def make_crop(image: ndarray,
 
 
 def make_crop_rotate(image: ndarray,
-               x1: int or float,
-               x2: int or float,
-               y1: int or float,
-               y2: int or float,
-               ) -> ndarray:
+                     x1: int or float,
+                     x2: int or float,
+                     y1: int or float,
+                     y2: int or float,
+                     max_width: int or float,
+                     max_height: int or float
+                     ) -> ndarray:
     """
     Given an image and 4 points in space,
     returns an unoriented crop image

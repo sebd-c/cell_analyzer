@@ -78,6 +78,9 @@ def make_single_crop(image: ndarray,
     # getting img shape
     shape = image.shape
 
+    # for img border setting
+    img_h, img_w = image.shape[:2]
+
     # creates mask to hold cytoplasm contour
     # for noise cleaning process outside object
     mask = np.zeros(shape, dtype=np.uint8)
@@ -97,10 +100,18 @@ def make_single_crop(image: ndarray,
     if w > h:
 
         # vertex settings per object
+        # with safe border limitations
         x1 = cx - max_height / 2
+        x1 = max(0, int(x1))
+
         x2 = cx + max_height / 2
+        x2 = min(img_w, int(x2))
+
         y1 = cy - max_width / 2
+        y1 = max(0, int(y1))
+
         y2 = cy + max_width / 2
+        y2 = min(img_h, int(y2))
 
         # image cropping
         crop = make_crop_rotate(image=clean_image,
@@ -113,9 +124,16 @@ def make_single_crop(image: ndarray,
 
         # vertex settings per object
         x1 = cx - max_width / 2
+        x1 = max(0, int(x1))
+
         x2 = cx + max_width / 2
+        x2 = min(img_w, int(x2))
+
         y1 = cy - max_height / 2
+        y1 = max(0, y1)
+
         y2 = cy + max_height / 2
+        y2 = min(img_h, int(y2))
 
         # image cropping
         crop = make_crop(image=clean_image,

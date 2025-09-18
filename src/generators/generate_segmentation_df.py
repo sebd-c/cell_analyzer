@@ -249,28 +249,28 @@ def process_contour_phase(single_contour_img: ndarray,
     rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
     single_contour_df.drop(rows_to_delete, inplace=True)
 
-    # if not len(single_contour_df) == 0:
-    #     # put label
-    #     make_contour_label(contour_index=int(pixint),
-    #                        centroid_x=single_contour_df['cx_coords'].iloc[0],
-    #                        centroid_y=single_contour_df['cy_coords'].iloc[0],
-    #                        color=255,
-    #                        thickness=2,
-    #                        img_to_label=image,
-    #                        contour=contour[0],
-    #                        )
-    # else:
-    #     pass
+    if not len(single_contour_df) == 0:
+        # put label
+        make_contour_label(contour_index=int(pixint),
+                           centroid_x=single_contour_df['cx_coords'].iloc[0],
+                           centroid_y=single_contour_df['cy_coords'].iloc[0],
+                           color=255,
+                           thickness=2,
+                           img_to_label=image,
+                           contour=contour[0],
+                           )
+    else:
+        pass
 
     # put label
-    make_contour_label(contour_index=int(pixint),
-                       centroid_x=single_contour_df['cx_coords'].iloc[0],
-                       centroid_y=single_contour_df['cy_coords'].iloc[0],
-                       color=255,
-                       thickness=2,
-                       img_to_label=image,
-                       contour=contour[0],
-                       )
+    # make_contour_label(contour_index=int(pixint),
+    #                    centroid_x=single_contour_df['cx_coords'].iloc[0],
+    #                    centroid_y=single_contour_df['cy_coords'].iloc[0],
+    #                    color=255,
+    #                    thickness=2,
+    #                    img_to_label=image,
+    #                    contour=contour[0],
+    #                    )
 
     # returns the contours and the list of intensities
     return single_contour_df
@@ -330,14 +330,13 @@ def make_image_contours_df(mask_name: str,
     # exit()
 
     # test output
-    # overlays_output_path = join(overlays_output_folder, mask_name)
-    # imwrite(overlays_output_path, mask)
+    overlays_output_path = join(overlays_output_folder, mask_name)
+    imwrite(overlays_output_path, mask)
     # exit()
 
     # getting intensity range to
     # separate contours before binarizing mask
     valid_pixint_list = get_unique_ids(mask)
-
     # max_intensity = mask.max()  # noqa
 
     # getting shape for new masks arrays
@@ -355,8 +354,8 @@ def make_image_contours_df(mask_name: str,
         single_contour_img[mask == pixel_intensity] = 1
 
         flattened_contour_img = single_contour_img.flatten()
-        # unique_val, counts = unique(flattened_contour_img, return_counts=True)
-        # print(dict(zip(unique_val, counts)))
+        unique_val, counts = unique(flattened_contour_img, return_counts=True)
+        print(dict(zip(unique_val, counts)))
 
         # choose which way the function should be continued
         # if the parameter for phase was set,

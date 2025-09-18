@@ -126,7 +126,7 @@ def link_cytnuc(cyt_df: DataFrame,
                                'cyto_ecc': cyto_row['eccentricity'],
                                'cyto_rou': cyto_row['roundness'],
                                'cii': cyto_row['ii'],
-                               'cyto_contour': cyto_row['contour'],
+                               'cyto_contour': [cyto_row['contour']],
                                'cyto_grayscale_mean': cyto_row['grayscale_mean'],
                                'cyto_grayscale_median': cyto_row['grayscale_median'],
                                'cyto_grayscale_max': cyto_row['grayscale_max'],
@@ -161,7 +161,7 @@ def link_cytnuc(cyt_df: DataFrame,
                                'nuc_ecc': nuc_row['eccentricity'],
                                'nuc_rou': nuc_row['roundness'],
                                'nii': nuc_row['ii'],
-                               'nuc_contour': nuc_row['contour'],
+                               'nuc_contour': [nuc_row['contour']],
                                'nuc_grayscale_mean': nuc_row['grayscale_mean'],
                                'nuc_grayscale_median': nuc_row['grayscale_median'],
                                'nuc_grayscale_max': nuc_row['grayscale_max'],
@@ -214,7 +214,7 @@ def link_cytnuc(cyt_df: DataFrame,
     # saving new df
     concat_linked_df.to_pickle(output_path)
 
-    return concat_linked_df
+    return
 
 
 def make_cytnuc_output(cyt_csv_input_path: str,

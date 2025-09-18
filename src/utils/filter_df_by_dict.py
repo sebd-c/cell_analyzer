@@ -32,12 +32,12 @@ def filter_df(unfiltered_df: DataFrame,
     # make the dictionary into a df
     # params_df = DataFrame.from_dict(filter_dict)
     params_df = DataFrame([(k, v) for k, vs in filter_dict.items() for v in vs],
-                          columns=['image_name', 'contour_index'])
+                          columns=['image_name', 'cyto_id'])
 
     # now that we have both the complete df and the
     # filter the df using a left outer join
     filtered_df = unfiltered_df.merge(params_df,
-                                      on=['image_name', 'contour_index'],
+                                      on=['image_name', 'cyto_id'],
                                       how='left',
                                       indicator=True
                                       )
