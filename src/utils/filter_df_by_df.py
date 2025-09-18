@@ -47,7 +47,7 @@ def merge_label_df(infos_df_path: str,
     labeled_df = labeled_df.drop(columns='_merge')
 
     # sum all rows of xgal columns ang asigns it to a pre-filtered colum
-    labeled_df['cons_xgal'] = labeled_df['xgal_d'] + labeled_df['xgal_e'] + labeled_df['xgal_h']
+    labeled_df['cons_xgal'] = labeled_df['xgal_1'] + labeled_df['xgal_2'] + labeled_df['xgal_3']
 
     # make negative label
     labeled_df.loc[labeled_df['cons_xgal'] < 2, 'cons_xgal'] = 0
@@ -57,7 +57,7 @@ def merge_label_df(infos_df_path: str,
 
     # repeat for status
     # sum all rows of xgal columns ang asigns it to a pre-filtered colum
-    labeled_df['cons_sstatus'] = labeled_df['s_status_d'] + labeled_df['s_status_e'] + labeled_df['s_status_h']
+    labeled_df['cons_sstatus'] = labeled_df['s_status_1'] + labeled_df['s_status_2'] + labeled_df['s_status_3']
 
     # make negative label
     labeled_df.loc[labeled_df['cons_sstatus'] < 2, 'cons_sstatus'] = 0
