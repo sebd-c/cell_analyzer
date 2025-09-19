@@ -36,7 +36,7 @@ def merge_label_df(infos_df_path: str,
     # now that we have both the complete df and the
     # filter the df using a left outer join
     labeled_df = infos_df.merge(labels_df,
-                                on=['image_name', 'contour_index'],
+                                on=['image_name', 'cyto_id'],
                                 how='left',
                                 indicator=True
                                 )
@@ -111,7 +111,7 @@ def get_args_dict() -> dict:
     parser.add_argument('-i', '--full-dataframe',
                         dest='input_dataframe',
                         required=True,
-                        help='defines path to input csv containing all infos')
+                        help='defines path to input pickle containing all infos')
 
     # input labels csv path
     parser.add_argument('-l', '--label-dataframe',

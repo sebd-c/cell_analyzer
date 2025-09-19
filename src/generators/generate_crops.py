@@ -265,7 +265,7 @@ def make_folder_crops(cyto_input_folder: str,
     for index, row in df.iterrows():
 
         # use open cv bb to get min rect shape
-        x, y, w, h = boundingRect(row['contour'])
+        x, y, w, h = boundingRect(row['cyto_contour'])
 
         # as a big object in height or width are the same
         # set one variable to always be the bigger one (some objects will be "flipped" in the end)
