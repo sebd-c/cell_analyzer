@@ -1,6 +1,6 @@
 # generate segmentation dfs module
 import numpy as np
-
+from math import ceil
 print('initializing...')  # noqa
 
 # Code destined to generating
@@ -15,6 +15,7 @@ from argparse import ArgumentParser
 from cv2 import imread
 from cv2 import boundingRect
 from cv2 import drawContours
+from cv2 import FILLED
 from cv2 import split
 from cv2 import imwrite
 from cv2 import rotate
@@ -27,8 +28,8 @@ from numpy import pad
 from pandas import concat, read_pickle
 from pandas import DataFrame
 from os.path import join
-from numpy import max
-from numpy import min
+#from numpy import max
+# from numpy import min
 from numpy import mean
 from numpy import median
 from numpy import sum
@@ -86,8 +87,12 @@ def make_single_crop(image: ndarray,
     mask = np.zeros(shape, dtype=np.uint8)
 
     # filling mask image
-    drawContours(mask, contour, 0, pixel_intensity, -1)
+    drawContours(mask, contour, -1, pixel_intensity, FILLED)
 
+    flattened_contour_img = mask.flatten()
+    unique_val, counts = unique(flattened_contour_img, return_counts=True)
+    print(dict(zip(unique_val, counts)))
+    # exit()
     # apply mask to make a clean image
     clean_image = apply_mask(image=image,
                              mask=mask,
@@ -118,7 +123,9 @@ def make_single_crop(image: ndarray,
                                 x1=x1,
                                 x2=x2,
                                 y1=y1,
-                                y2=y2)
+                                y2=y2,
+                                max_width=max_width,
+                                max_height=max_height)
 
     else:
 
@@ -130,7 +137,7 @@ def make_single_crop(image: ndarray,
         x2 = min(img_w, int(x2))
 
         y1 = cy - max_height / 2
-        y1 = max(0, y1)
+        y1 = max(0, int(y1))
 
         y2 = cy + max_height / 2
         y2 = min(img_h, int(y2))
@@ -140,7 +147,10 @@ def make_single_crop(image: ndarray,
                          x1=x1,
                          x2=x2,
                          y1=y1,
-                         y2=y2)
+                         y2=y2,
+                         max_width=max_width,
+                         max_height=max_height
+                         )
 
     return crop
 
@@ -176,7 +186,9 @@ def make_image_crops(cyto_path: str,
                         -1)
 
     # takeout channel from img name
-    image_name = image_name.replace('green', '', regex=True)
+    image_name = image_name.replace('green', '')
+    image_name = image_name.replace('red', '')
+    image_name = image_name.replace('phase', '')
 
     # segment the df to loop only on this image's objects
     image_df = df[df['image_name'] == image_name]
@@ -187,13 +199,15 @@ def make_image_crops(cyto_path: str,
     # loop not to join different contours
     for index, row in unique_df.iterrows():
 
+        # fixing name just for order
+        split_img_name = image_name.split('.')
         # making crop name for saving
-        crop_name = row['cyto_id'] + '_' + image_name
+        crop_name = split_img_name[0] + '_' + str(row['cyto_id']) + '.' + split_img_name[1]
 
         # naming df values
         contour = row['cyto_contour']
-        cx = row['cyto_cx'].iloc[0]
-        cy = row['cyto_cy'].iloc[0]
+        cx = row['cyto_cx']
+        cy = row['cyto_cy']
 
         # make crops
         cyto_crop = make_single_crop(image=cyto_image,
@@ -447,9 +461,13 @@ def main():
 
     # running function to get the segmentation df for a folder
     make_folder_crops(cyto_input_folder=cyto_folder,
+                      nuc_input_folder=nuclei_folder,
+                      phase_input_folder=phase_folder,
                       image_extension=images_extension,
                       df_path=df_path,
-                      cyto_output_folder=output_folder,
+                      cyto_output_folder=cyto_output_folder,
+                      nuc_output_folder=nuclei_output_folder,
+                      phase_output_folder=phase_output_folder,
                       )
 
 

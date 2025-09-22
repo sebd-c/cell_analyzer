@@ -22,6 +22,8 @@ from cv2 import putText
 from cv2 import LINE_8
 from cv2 import imwrite
 from cv2 import drawContours
+from cv2 import copyMakeBorder
+from cv2 import BORDER_CONSTANT
 from math import sqrt
 from cv2 import fitEllipse
 from cv2 import arcLength
@@ -937,26 +939,25 @@ def make_crop(image: ndarray,
     """
     # crop based on coordinates
     crop = image[y1:y2, x1:x2]
-
+    print(f"max width is {max_width} and max height {max_height}")
     # get crop current size for padding
     crop_h, crop_w = crop.shape[:2]
 
     # pad if crop is smaller than desired
-    pad_h = max_height - crop_h
-    pad_w = max_width - crop_w
+    pad_h = max(0, max_height - crop_h)
+    pad_w = max(0, max_width - crop_w)
 
     top = pad_h // 2
     bottom = pad_h - top
     left = pad_w // 2
     right = pad_w - left
 
-    crop_padded = cv2.copyMakeBorder(crop, top, bottom, left, right,
-                                     borderType=cv2.BORDER_CONSTANT,
-                                     value=pad_value)
-    # make some padding so that no object touches the border
-    pad(crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
-
-    return crop
+    pad_value = 0
+    crop_padded = copyMakeBorder(crop, top, bottom, left, right,
+                                 borderType=BORDER_CONSTANT,
+                                 value=pad_value)
+    print(f"unrotated:{crop_padded.shape[:2]}")
+    return crop_padded
 
 
 def make_crop_rotate(image: ndarray,
@@ -973,14 +974,29 @@ def make_crop_rotate(image: ndarray,
     """
     # crop based on coordinates
     crop = image[y1:y2, x1:x2]
-
+    print(f"max width is {max_width} and max height {max_height}")
     # rotate accordingly
     oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
 
-    # make some padding
-    pad(oriented_crop, ((5, 5), (5, 5)), mode='constant', constant_values=0)
+    # get crop current size for padding
+    crop_h, crop_w = oriented_crop.shape[:2]
 
-    return oriented_crop
+    # pad if crop is smaller than desired
+    pad_h = max(0, max_width - crop_h)
+    pad_w = max(0, max_height- crop_w)
+
+    top = pad_h // 2
+    bottom = pad_h - top
+    left = pad_w // 2
+    right = pad_w - left
+
+    pad_value = 0
+    crop_padded = copyMakeBorder(oriented_crop, top, bottom, left, right,
+                                 borderType=BORDER_CONSTANT,
+                                 value=pad_value)
+
+    print(f"rotated:{crop_padded.shape[:2]}")
+    return crop_padded
 
 
 
