@@ -932,7 +932,7 @@ def make_crop(image: ndarray,
               y2: int or float,
               max_width: int or float,
               max_height: int or float
-               ) -> ndarray:
+              ) -> ndarray:
     """
     Given an image and 4 points in space,
     returns an unoriented crop image
@@ -941,7 +941,7 @@ def make_crop(image: ndarray,
     crop = image[y1:y2, x1:x2]
     print(f"max width is {max_width} and max height {max_height}")
     # get crop current size for padding
-    crop_h, crop_w = crop.shape[:2]
+    crop_h, crop_w = crop.shape
 
     # pad if crop is smaller than desired
     pad_h = max(0, max_height - crop_h)
@@ -956,7 +956,7 @@ def make_crop(image: ndarray,
     crop_padded = copyMakeBorder(crop, top, bottom, left, right,
                                  borderType=BORDER_CONSTANT,
                                  value=pad_value)
-    print(f"unrotated:{crop_padded.shape[:2]}")
+    print(f"unrotated:{crop_padded.shape}")
     return crop_padded
 
 
@@ -979,7 +979,7 @@ def make_crop_rotate(image: ndarray,
     # oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
 
     # get crop current size for padding
-    crop_h, crop_w = crop.shape[:2]
+    crop_h, crop_w = crop.shape
 
     # pad if crop is smaller than desired
     pad_h = max(0, max_width - crop_h)
@@ -996,7 +996,7 @@ def make_crop_rotate(image: ndarray,
                                  value=pad_value)
     oriented_crop = rotate(crop_padded, ROTATE_90_CLOCKWISE)
 
-    print(f"rotated:{oriented_crop.shape[:2]}")
+    print(f"rotated:{oriented_crop.shape}")
     return oriented_crop
 
 

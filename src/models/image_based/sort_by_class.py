@@ -17,6 +17,7 @@ from cv2 import imwrite
 from pandas import DataFrame
 from pandas import read_pickle
 from os.path import join
+from re import split
 from src.utils.aux_funcs import make_dir_list
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
@@ -51,10 +52,12 @@ def organize_crop(crop_path: str,
     df['label'] = df['label'].replace(label_dict)
 
     # create crop name split for identification in df
-    crop_name_split = crop_name.split('_')
+    crop_name_split = result_list = split(r'_|.', crop_name)
 
+    # recreate image name
+    img_name = crop_name_split[0] + '.' + crop_name_split[2]
     # identify crop in df to get label
-    crop_row = df[(df['cyto_id'] == crop_name_split[0]) & (df['image_name'] == crop_name_split[1])]
+    crop_row = df[(df['cyto_id'] == crop_name_split[1]) & (df['image_name'] == img_name)]
 
     # getting crop label
     crop_label = crop_row['label']
@@ -86,7 +89,7 @@ def organize_crops_folder(images_input_folder: str,
 
     # getting image files in respective input folder
     crop_files = get_files_in_folder(path_to_folder=images_input_folder,
-                                      extension=image_extension)
+                                     extension=image_extension)
 
     crop_files_num = len(crop_files)
 

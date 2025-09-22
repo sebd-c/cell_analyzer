@@ -21,6 +21,7 @@ from cv2 import imwrite
 from cv2 import rotate
 from cv2 import ROTATE_90_CLOCKWISE
 from cv2 import ROTATE_90_COUNTERCLOCKWISE
+from cv2 import fillPoly
 from copy import copy
 from numpy import uint8 as np_uint8
 from numpy import ndarray
@@ -66,8 +67,10 @@ def make_single_crop(image: ndarray,
                      cx: int or float,
                      cy: int or float,
                      max_width: int or float,
-                     max_height: int or float
-                     ) -> ndarray:
+                     max_height: int or float,
+                     output_folder: str,
+                     crop_name: str
+                     ) -> None:
     """
     Given an image, a contour, the contour's centroid (x, y),
     and the supposed size of the crop,
@@ -80,23 +83,15 @@ def make_single_crop(image: ndarray,
     shape = image.shape
 
     # for img border setting
-    img_h, img_w = image.shape[:2]
+    img_h, img_w = image.shape
 
     # creates mask to hold cytoplasm contour
     # for noise cleaning process outside object
     mask = np.zeros(shape, dtype=np.uint8)
 
     # filling mask image
-    drawContours(mask, contour, -1, pixel_intensity, FILLED)
-    cv2.fillPoly(mask, pts=contour, color=255)
-    overlays_output_path = "D:\\work\\data\\u87\\xgal_24_08_27\\grayscale\\images\\test_mask.tif"
-    imwrite(overlays_output_path, mask)
-    exit()
+    drawContours(mask, [contour], -1, pixel_intensity, FILLED)
 
-    flattened_contour_img = mask.flatten()
-    unique_val, counts = unique(flattened_contour_img, return_counts=True)
-    print(dict(zip(unique_val, counts)))
-    # exit()
     # apply mask to make a clean image
     clean_image = apply_mask(image=image,
                              mask=mask,
@@ -156,7 +151,12 @@ def make_single_crop(image: ndarray,
                          max_height=max_height
                          )
 
-    return crop
+    # saving crops
+    save_img(output_folder=output_folder,
+             file_name=crop_name,
+             img_to_save=crop)
+
+    return
 
 def make_image_crops(cyto_path: str,
                      nuc_path: str,
@@ -214,42 +214,36 @@ def make_image_crops(cyto_path: str,
         cy = row['cyto_cy']
 
         # make crops
-        cyto_crop = make_single_crop(image=cyto_image,
-                                     contour=contour,
-                                     cx=cx,
-                                     cy=cy,
-                                     max_width=max_width,
-                                     max_height=max_height
-                                     )
+        make_single_crop(image=cyto_image,
+                         contour=contour,
+                         cx=cx,
+                         cy=cy,
+                         max_width=max_width,
+                         max_height=max_height,
+                         output_folder=cyto_output_folder,
+                         crop_name=crop_name
+                         )
 
-        nuc_crop = make_single_crop(image=nuc_image,
-                                    contour=contour,
-                                    cx=cx,
-                                    cy=cy,
-                                    max_width=max_width,
-                                    max_height=max_height
-                                    )
+        make_single_crop(image=nuc_image,
+                         contour=contour,
+                         cx=cx,
+                         cy=cy,
+                         max_width=max_width,
+                         max_height=max_height,
+                         output_folder=nuc_output_folder,
+                         crop_name=crop_name
+                         )
 
-        phase_crop = make_single_crop(image=phase_image,
-                                      contour=contour,
-                                      cx=cx,
-                                      cy=cy,
-                                      max_width=max_width,
-                                      max_height=max_height
-                                      )
+        make_single_crop(image=phase_image,
+                         contour=contour,
+                         cx=cx,
+                         cy=cy,
+                         max_width=max_width,
+                         max_height=max_height,
+                         output_folder=phase_output_folder,
+                         crop_name=crop_name
+                         )
 
-        # saving crops
-        save_img(output_folder=cyto_output_folder,
-                 file_name=crop_name,
-                 img_to_save=cyto_crop)
-
-        save_img(output_folder=nuc_output_folder,
-                 file_name=crop_name,
-                 img_to_save=nuc_crop)
-
-        save_img(output_folder=phase_output_folder,
-                 file_name=crop_name,
-                 img_to_save=phase_crop)
 
     return
 
