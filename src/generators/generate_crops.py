@@ -88,6 +88,10 @@ def make_single_crop(image: ndarray,
 
     # filling mask image
     drawContours(mask, contour, -1, pixel_intensity, FILLED)
+    cv2.fillPoly(mask, pts=contour, color=255)
+    overlays_output_path = "D:\\work\\data\\u87\\xgal_24_08_27\\grayscale\\images\\test_mask.tif"
+    imwrite(overlays_output_path, mask)
+    exit()
 
     flattened_contour_img = mask.flatten()
     unique_val, counts = unique(flattened_contour_img, return_counts=True)
