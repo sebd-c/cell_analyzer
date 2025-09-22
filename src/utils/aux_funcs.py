@@ -976,10 +976,10 @@ def make_crop_rotate(image: ndarray,
     crop = image[y1:y2, x1:x2]
     print(f"max width is {max_width} and max height {max_height}")
     # rotate accordingly
-    oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
+    # oriented_crop = rotate(crop, ROTATE_90_CLOCKWISE)
 
     # get crop current size for padding
-    crop_h, crop_w = oriented_crop.shape[:2]
+    crop_h, crop_w = crop.shape[:2]
 
     # pad if crop is smaller than desired
     pad_h = max(0, max_width - crop_h)
@@ -991,12 +991,13 @@ def make_crop_rotate(image: ndarray,
     right = pad_w - left
 
     pad_value = 0
-    crop_padded = copyMakeBorder(oriented_crop, top, bottom, left, right,
+    crop_padded = copyMakeBorder(crop, top, bottom, left, right,
                                  borderType=BORDER_CONSTANT,
                                  value=pad_value)
+    oriented_crop = rotate(crop_padded, ROTATE_90_CLOCKWISE)
 
-    print(f"rotated:{crop_padded.shape[:2]}")
-    return crop_padded
+    print(f"rotated:{oriented_crop.shape[:2]}")
+    return oriented_crop
 
 
 
