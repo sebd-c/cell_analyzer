@@ -19,6 +19,7 @@ from pandas import read_pickle
 from os.path import join
 from re import split
 from src.utils.aux_funcs import make_dir_list
+from src.utils.aux_funcs import save_img
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
@@ -32,7 +33,7 @@ print('all required libraries successfully imported.')  # noqa
 def organize_crop(crop_path: str,
                   crop_name: str,
                   df: DataFrame,
-                  output_path_dict: dict
+                  output_folder_dict: dict
                   ) -> None:
     """
     given an object crop,
@@ -52,21 +53,30 @@ def organize_crop(crop_path: str,
     df['label'] = df['label'].replace(label_dict)
 
     # create crop name split for identification in df
-    crop_name_split = result_list = split(r'_|.', crop_name)
+    crop_name_split = split(r"[_.]", crop_name)
 
     # recreate image name
     img_name = crop_name_split[0] + '.' + crop_name_split[2]
+
+    # do the same for crop id for matching type
+    crop_id = int(crop_name_split[1])
+
     # identify crop in df to get label
-    crop_row = df[(df['cyto_id'] == crop_name_split[1]) & (df['image_name'] == img_name)]
+    crop_row = df[(df['cyto_id'] == crop_id) & (df['image_name'] == img_name)]
 
-    # getting crop label
-    crop_label = crop_row['label']
+    # need to change the row of df format to series, thus:
+    current_row = crop_row.iloc[0]
 
-    # getting output path
-    crop_output_path = output_path_dict[crop_label]
+    # get the folder dict key
+    current_label = current_row['label']
+
+    # get dict value, i.e. output folder
+    current_output_folder = output_folder_dict[current_label]
 
     # save in specified dir
-    imwrite(crop_output_path, crop)
+    save_img(output_folder=current_output_folder,
+             file_name=crop_name,
+             img_to_save=crop)
 
     return
 
@@ -109,7 +119,7 @@ def organize_crops_folder(images_input_folder: str,
         organize_crop(crop_path=image_input_path,
                       crop_name=crop_file,
                       df=df,
-                      output_path_dict=output_path_dict)
+                      output_folder_dict=output_path_dict)
 
     # printing execution message
     print('analysis complete!')

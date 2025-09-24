@@ -10,7 +10,7 @@
 # importing required libraries
 from copy import copy
 from os import listdir
-from os import mkdir
+from os import makedirs
 from os.path import join
 from sys import stdout
 from numpy import ndarray
@@ -894,7 +894,7 @@ def make_dir_list(class_list: str,
         class_path = join(output_folder, class_name)
 
         # make directory
-        mkdir(class_path)
+        makedirs(class_path, exist_ok=True)
 
         # append list of directories
         output_path_list.append(class_path)
