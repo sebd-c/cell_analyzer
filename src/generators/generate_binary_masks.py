@@ -292,14 +292,17 @@ def generate_binary_masks(input_folder: str,
     masks, based on given thresholds.
     """
     # getting images in input folder
-    images = get_specific_files_in_folder(path_to_folder=input_folder,
-                                          extension=images_extension)
+    images = get_files_in_folder(path_to_folder=input_folder,
+                                 extension=images_extension)
 
     # iterating over images in input folder
     for image_name in images:
 
         # updating progress tracker attributes
-        progress_tracker.current_image += 1
+        base_string = 'generating segmentation df #INDEX# of #TOTAL#'
+        print_progress_message(base_string=base_string,
+                               index=file_index,
+                               total=masks_files_num)
 
         # getting current image input/output paths
         current_input_path = join(input_folder,
@@ -314,12 +317,11 @@ def generate_binary_masks(input_folder: str,
                              min_size=min_size,
                              max_size=max_size,
                              kernel_size=kernel_size,
-                             output_path=current_output_path,
-                             progress_tracker=progress_tracker)
+                             output_path=current_output_path
+                             )
 
 
 def parse_and_run(args_dict: dict,
-                  progress_tracker: ModuleProgressTracker
                   ) -> None:
     """
     Extracts args from args_dict
