@@ -33,8 +33,168 @@ from src.utils.aux_funcs import print_execution_parameters
 print('all required libraries successfully imported.')  # noqa
 
 #####################################################################
-# argument parsing related functions
 
+######################################################################
+# defining auxiliary functions
+
+
+def mask_single_img(image: ndarray,
+                    lower_threshold: int,
+                    upper_threshold: int,
+                    min_size: int,
+                    max_size: int,
+                    kernel_size: int
+                    ) -> ndarray:
+    """
+    Given a 2d array, returns masked
+    image, based on given parameters.
+    """
+    # getting image dimensions
+    image_dimensions = image.shape
+    img_height, img_width = image_dimensions
+
+    # blurring image (good for rounding objects)
+    image = GaussianBlur(image,
+                         (kernel_size, kernel_size),
+                         BORDER_DEFAULT)
+
+    # applying upper threshold (discards pixels with higher intensity than threshold)
+    image[image > upper_threshold] = 0
+
+    # applying lower threshold
+    image[image < lower_threshold] = 0
+    image[image >= lower_threshold] = 255
+
+    # converting image to 8bit
+    image = image.astype(np_uint8)
+
+    # finding contours
+    contours, _ = findContours(image,
+                               RETR_EXTERNAL,
+                               CHAIN_APPROX_NONE)
+
+    # resetting image (I'll redraw only contours within specified size parameters)
+    image = np_zeroes(image_dimensions)
+
+    # iterating over contours
+    for contour in contours:
+
+        # getting current contour area
+        contour_area = contourArea(contour)
+
+        # getting contour area check bool
+        area_check = (contour_area >= min_size) and (contour_area <= max_size)
+
+        # checking current contour area
+        if area_check:
+
+            # adding current contour to blank image
+            drawContours(image=image,  # noqa
+                         contours=[contour],
+                         contourIdx=-1,
+                         color=255,
+                         thickness=-1)
+
+    # returning filtered mask image
+    return image
+
+
+def generate_binary_mask(input_path: str,
+                         lower_threshold: int,
+                         upper_threshold: int,
+                         min_size: int,
+                         max_size: int,
+                         kernel_size: int,
+                         output_path: str,
+                         ) -> None:
+    """
+    Given a path to an image, a pixel intensity
+    threshold, reads image as grayscale and
+    binarizes image, applying GaussianBlur
+    with given kernel size, saving binary
+    mask to given output path.
+    """
+    # reading current image
+    image = imread(input_path,
+                   -1)
+
+    # defining placeholder value for image mask
+    image_mask = None
+
+
+    # getting image mask
+    image_mask = mask_single_img(image=image,
+                                 kernel_size=kernel_size,
+                                 lower_threshold=lower_threshold,
+                                 upper_threshold=upper_threshold,
+                                 min_size=min_size,
+                                 max_size=max_size)
+
+    # converting image to 8bit
+    image_mask = image_mask.astype(np_uint8)
+
+    # saving image
+    sk_imsave(output_path,
+              image_mask,
+              check_contrast=False)
+
+
+def generate_binary_masks(input_folder: str,
+                          images_extension: str,
+                          lower_threshold: int,
+                          upper_threshold: int,
+                          min_size: int,
+                          max_size: int,
+                          kernel_size: int,
+                          output_folder: str,
+                          ) -> None:
+    """
+    Given a path to a folder containing cell
+    fluorescent images, generates binary
+    masks, based on given thresholds.
+    """
+    # getting images in input folder
+    images = get_files_in_folder(path_to_folder=input_folder,
+                                 extension=images_extension)
+    # get iterating size
+    image_files_num = len(images)
+
+    # iterating over images in input folder
+    for image_index, image_name in enumerate(images, 1):
+
+        # updating progress tracker attributes
+        base_string = 'generating segmentation df #INDEX# of #TOTAL#'
+        print_progress_message(base_string=base_string,
+                               index=image_index,
+                               total=image_files_num)
+
+        # getting current image input/output paths
+        current_input_path = join(input_folder,
+                                  image_name)
+        current_output_path = join(output_folder,
+                                   image_name)
+
+        # generating binary mask for current image
+        generate_binary_mask(input_path=current_input_path,
+                             lower_threshold=lower_threshold,
+                             upper_threshold=upper_threshold,
+                             min_size=min_size,
+                             max_size=max_size,
+                             kernel_size=kernel_size,
+                             output_path=current_output_path
+                             )
+
+
+def parse_and_run(args_dict: dict,
+                  ) -> None:
+    """
+    Extracts args from args_dict
+    and runs module function.
+    """
+
+
+######################################################################
+# argument parsing related functions
 
 def get_args_dict() -> dict:
     """
@@ -122,211 +282,14 @@ def get_args_dict() -> dict:
     # returning the arguments dictionary
     return args_dict
 
-######################################################################
-# defining auxiliary functions
 
+# defining main function
+def main():
+    """Runs main code."""
 
-def mask_single_slice(image: ndarray,
-                      lower_threshold: int,
-                      upper_threshold: int,
-                      min_size: int,
-                      max_size: int,
-                      kernel_size: int
-                      ) -> ndarray:
-    """
-    Given a 2d array, returns masked
-    image, based on given parameters.
-    """
-    # getting image dimensions
-    image_dimensions = image.shape
-    img_height, img_width = image_dimensions
+    # getting args dict
+    args_dict = get_args_dict()
 
-    # blurring image (good for rounding objects)
-    image = GaussianBlur(image,
-                         (kernel_size, kernel_size),
-                         BORDER_DEFAULT)
-
-    # applying upper threshold (discards pixels with higher intensity than threshold)
-    image[image > upper_threshold] = 0
-
-    # applying lower threshold
-    image[image < lower_threshold] = 0
-    image[image >= lower_threshold] = 255
-
-    # converting image to 8bit
-    image = image.astype(np_uint8)
-
-    # finding contours
-    contours, _ = findContours(image,
-                               RETR_EXTERNAL,
-                               CHAIN_APPROX_NONE)
-
-    # resetting image (I'll redraw only contours within specified size parameters)
-    image = np_zeroes(image_dimensions)
-
-    # iterating over contours
-    for contour in contours:
-
-        # getting current contour area
-        contour_area = contourArea(contour)
-
-        # getting contour area check bool
-        area_check = (contour_area >= min_size) and (contour_area <= max_size)
-
-        # checking current contour area
-        if area_check:
-
-            # adding current contour to blank image
-            drawContours(image=image,  # noqa
-                         contours=[contour],
-                         contourIdx=-1,
-                         color=255,
-                         thickness=-1)
-
-    # returning filtered mask image
-    return image
-
-
-def mask_multiple_slices(image: ndarray,
-                         lower_threshold: int,
-                         upper_threshold: int,
-                         min_size: int,
-                         max_size: int,
-                         kernel_size: int,
-                         ) -> ndarray:
-    """
-    Given a 3d array, iterates over slices,
-    masking each slice based on given
-    parameters, returning masked 3d image.
-    """
-    # defining placeholder value for masks_list
-    masks_list = []
-
-    # getting slices num
-    slices_num = len(image)
-
-    # updating progress tracker attributes
-    progress_tracker.slices_num = slices_num
-
-    # resetting progress tracker attributes
-    progress_tracker.current_slice = 0
-
-    # iterating over z stack
-    for z_slice in image:
-
-        # updating progress tracker attributes
-        progress_tracker.current_iteration += 1
-        progress_tracker.current_slice += 1
-
-        # getting current slice mask
-        current_mask = mask_single_slice(image=z_slice,
-                                         lower_threshold=lower_threshold,
-                                         upper_threshold=upper_threshold,
-                                         min_size=min_size,
-                                         max_size=max_size,
-                                         kernel_size=kernel_size)
-
-        # concatenating current slice mask to image masks list
-        masks_list.append(current_mask)
-
-    # concatenating masks into final image mask
-    image_mask = stack(arrays=masks_list,
-                       axis=0)
-
-    # returning final image mask
-    return image_mask
-
-
-def generate_binary_mask(input_path: str,
-                         lower_threshold: int,
-                         upper_threshold: int,
-                         min_size: int,
-                         max_size: int,
-                         kernel_size: int,
-                         output_path: str,
-                         ) -> None:
-    """
-    Given a path to an image, a pixel intensity
-    threshold, reads image as grayscale and
-    binarizes image, applying GaussianBlur
-    with given kernel size, saving binary
-    mask to given output path.
-    """
-    # reading current image
-    image = imread(input_path,
-                   -1)
-
-    # defining placeholder value for image mask
-    image_mask = None
-
-
-    # getting image mask
-    image_mask = mask_single_slice(image=image,
-                                   kernel_size=kernel_size,
-                                   lower_threshold=lower_threshold,
-                                   upper_threshold=upper_threshold,
-                                   min_size=min_size,
-                                   max_size=max_size)
-
-    # converting image to 8bit
-    image_mask = image_mask.astype(np_uint8)
-
-    # saving image
-    sk_imsave(output_path,
-              image_mask,
-              check_contrast=False)
-
-
-def generate_binary_masks(input_folder: str,
-                          images_extension: str,
-                          lower_threshold: int,
-                          upper_threshold: int,
-                          min_size: int,
-                          max_size: int,
-                          kernel_size: int,
-                          output_folder: str,
-                          ) -> None:
-    """
-    Given a path to a folder containing embryos
-    fluorescence images, generates binary
-    masks, based on given thresholds.
-    """
-    # getting images in input folder
-    images = get_files_in_folder(path_to_folder=input_folder,
-                                 extension=images_extension)
-
-    # iterating over images in input folder
-    for image_name in images:
-
-        # updating progress tracker attributes
-        base_string = 'generating segmentation df #INDEX# of #TOTAL#'
-        print_progress_message(base_string=base_string,
-                               index=file_index,
-                               total=masks_files_num)
-
-        # getting current image input/output paths
-        current_input_path = join(input_folder,
-                                  image_name)
-        current_output_path = join(output_folder,
-                                   image_name)
-
-        # generating binary mask for current image
-        generate_binary_mask(input_path=current_input_path,
-                             lower_threshold=lower_threshold,
-                             upper_threshold=upper_threshold,
-                             min_size=min_size,
-                             max_size=max_size,
-                             kernel_size=kernel_size,
-                             output_path=current_output_path
-                             )
-
-
-def parse_and_run(args_dict: dict,
-                  ) -> None:
-    """
-    Extracts args from args_dict
-    and runs module function.
-    """
     # getting input folder
     input_folder = args_dict['input_folder']
 
@@ -351,6 +314,12 @@ def parse_and_run(args_dict: dict,
     # getting output folder
     output_folder = args_dict['output_folder']
 
+    # printing execution parameters
+    print_execution_parameters(params_dict=args_dict)
+
+    # waiting for user input
+    enter_to_continue()
+
     # running generate_binary_masks function
     generate_binary_masks(input_folder=input_folder,
                           images_extension=images_extension,
@@ -359,21 +328,8 @@ def parse_and_run(args_dict: dict,
                           min_size=min_size,
                           max_size=max_size,
                           kernel_size=kernel_size,
-                          output_folder=output_folder,
-                          progress_tracker=progress_tracker)
-
-######################################################################
-# defining main function
-
-
-def main():
-    """Runs main code."""
-    # initializing current module progress tracker instance
-    progress_tracker = ModuleProgressTracker()
-
-    # running code in separate thread
-    progress_tracker.run(function=parse_and_run,
-                         args_parser=get_args_dict)
+                          output_folder=output_folder
+                          )
 
 ######################################################################
 # running main function

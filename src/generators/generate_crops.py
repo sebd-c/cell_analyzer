@@ -11,45 +11,23 @@ print('initializing...')  # noqa
 
 # importing required libraries
 print('importing required libraries...')  # noqa
-from argparse import ArgumentParser
+from os.path import join
 from cv2 import imread
+from cv2 import split
+from cv2 import FILLED
+from cv2 import imwrite
 from cv2 import boundingRect
 from cv2 import drawContours
-from cv2 import FILLED
-from cv2 import split
-from cv2 import imwrite
-from cv2 import rotate
-from cv2 import ROTATE_90_CLOCKWISE
-from cv2 import ROTATE_90_COUNTERCLOCKWISE
-from cv2 import fillPoly
-from copy import copy
-from numpy import uint8 as np_uint8
-from numpy import ndarray
-from numpy import pad
-from pandas import concat, read_pickle
 from pandas import DataFrame
-from os.path import join
-#from numpy import max
-# from numpy import min
-from numpy import mean
-from numpy import median
-from numpy import sum
-from numpy import unique
-from numpy import isin
-import tifffile
+from pandas import read_pickle
+from numpy import ndarray
+from numpy import uint8 as np_uint8
+from numpy import zeros as np_zeros
+from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import get_contour_centroid
-from src.utils.aux_funcs import get_area_box
-from src.utils.aux_funcs import get_contour_rratio
-from src.utils.aux_funcs import get_contour_ellipse_feats
-from src.utils.aux_funcs import get_contour_roundness
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
-from src.utils.aux_funcs import make_contour_label
-from src.utils.aux_funcs import get_unique_ids
-from src.utils.aux_funcs import get_coords
-from src.utils.aux_funcs import get_boundaries_mask
 from src.utils.aux_funcs import apply_mask
 from src.utils.aux_funcs import make_crop
 from src.utils.aux_funcs import make_crop_rotate
@@ -87,7 +65,7 @@ def make_single_crop(image: ndarray,
 
     # creates mask to hold cytoplasm contour
     # for noise cleaning process outside object
-    mask = np.zeros(shape, dtype=np.uint8)
+    mask = np_zeros(shape, dtype=np_uint8)
 
     # filling mask image
     drawContours(mask, [contour], -1, pixel_intensity, FILLED)
@@ -412,7 +390,7 @@ def get_args_dict() -> dict:
                         required=True,
                         help='defines path to output folder (phase crops)')
 
-        # creating arguments dictionary
+    # creating arguments dictionary
     args_dict = vars(parser.parse_args())
 
     # returning the arguments dictionary
@@ -454,6 +432,9 @@ def main():
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
+
+    # waiting for user input
+    enter_to_continue()
 
     # waiting for user input
 
