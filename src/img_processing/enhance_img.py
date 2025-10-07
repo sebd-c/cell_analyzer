@@ -18,6 +18,8 @@ from src.utils.aux_funcs import print_execution_parameters
 
 def enhance_single_img(og_img_path: str,
                        output_path: str,
+                       clip_limit: int,
+                       tile_size: int
                        ) -> None:
     """
     This function takes the path to a poor quality image,
@@ -25,11 +27,13 @@ def enhance_single_img(og_img_path: str,
     """
     img = imread(og_img_path, IMREAD_GRAYSCALE)
 
-    # create a CLAHE object (Arguments are optional).
+    # create a CLAHE object
+    clahe = createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
 
-    clahe = createCLAHE(clipLimit=3.0, tileGridSize=(2, 2))
+    # apply in image
     cl1 = clahe.apply(img)
 
+    # save clahe-d img
     imwrite(output_path, cl1)
 
     return
@@ -37,7 +41,9 @@ def enhance_single_img(og_img_path: str,
 
 def enhance_dir_imgs(input_folder: str,
                      output_folder: str,
-                     img_extension: str
+                     img_extension: str,
+                     clip_limit: int,
+                     tile_size: int
                      ) -> None:
     """
     This function takes an input folder containing all the
@@ -63,9 +69,11 @@ def enhance_dir_imgs(input_folder: str,
         output_path = join(output_folder,
                            img_file)
 
-        # runnning img processing func
+        # running img processing func
         enhance_single_img(og_img_path=img_input_path,
-                           output_path=output_path)
+                           output_path=output_path,
+                           clip_limit=clip_limit,
+                           tile_size=tile_size)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -103,6 +111,20 @@ def get_args_dict() -> dict:
                         default='.tif',
                         help='defines extension (.tif, .png, .jpg) of images in input folders')
 
+    # images extension param
+    parser.add_argument('-c', '--clip-limit',
+                        dest='clip_limit',
+                        required=False,
+                        default=3,
+                        help='defines clip limit size for open CVs CLAHE')
+
+    # images extension param
+    parser.add_argument('-t', '--tile-size',
+                        dest='tile_size',
+                        required=False,
+                        default=2,
+                        help='defines tile size to grid size in open CVs CLAHE')
+
     # output folder param
     parser.add_argument('-o', '--output_folder',
                         dest='output_folder',
@@ -130,6 +152,12 @@ def main():
 
     # getting images extension
     images_extension = args_dict['images_extension']
+
+    # getting clip limit
+    clip_limit = args_dict['clip_limit']
+
+    # getting tile size
+    tile_size = args_dict['tile_size']
 
     # getting csv output path
     output_folder = args_dict['output_folder']
