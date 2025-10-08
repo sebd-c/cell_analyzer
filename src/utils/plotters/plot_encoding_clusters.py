@@ -24,18 +24,9 @@ def add_handcrafted_features_col(df: DataFrame) -> None:
 
     # defining cols to be used as handcrafted features
     # TODO: update this function to use add_col from aux_funcs
-    features_cols = ['volume',
-                     'radius_ratio',
-                     'surface_area',
-                     'area_vol_ratio',
-                     'bounding_volume',
-                     'sphericity',
-                     'green_mean_intensity',
-                     'green_max_intensity',
-                     'green_std_intensity',
-                     'red_mean_intensity',
-                     'red_max_intensity',
-                     'red_std_intensity']
+    features_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
+                    'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
+                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii']
 
     # defining placeholder value for new col
     df[handcrafted_features_col] = None
@@ -102,7 +93,7 @@ def add_umap_cols(df: DataFrame,
     umap_2d = UMAP(n_components=2,
                    n_neighbors=15,
                    min_dist=0.1,
-                   metric='cosine',
+                   metric='braycurtis',
                    random_state=42)
 
     # getting 3d projection

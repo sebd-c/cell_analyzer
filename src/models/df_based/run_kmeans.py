@@ -6,8 +6,14 @@ from pandas import DataFrame
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from umap import UMAP
 import seaborn as sns
-
+from seaborn import scatterplot
+from seaborn import color_palette
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_samples
+from hdbscan import HDBSCAN
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score
 from sklearn.metrics import recall_score
@@ -115,132 +121,84 @@ def run_kmeans(input_path: str,
     # class names
     class_names = ['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
 
-    # # confusion matrix train set
-    # fig, ax = plt.subplots(figsize=(25, 25))
-    # ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax, normalize='true')
-    # ax.xaxis.set_ticklabels(class_names)
-    # ax.yaxis.set_ticklabels(class_names)
-    # _ = ax.set_title('Classification Confusion Matrix Train Normalized')
+
+def run_hdbscan(input_path: str,
+                output_folder: str
+                )-> None:
+    """
+    run hdbscan algorithm
+    """
+
+    # read data
+    data = read_pickle(input_path)
+
+    # set columns of interest
+    feature_cols = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
+                    'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
+                    'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii',
+                    ]
+
+    label_dict = {0: 'Normal', 1: 'Quiescent', 2: 'Fully Senescent', 3: 'Senescent-like'}
+
+    data.replace({'label': label_dict}, inplace=True)
+
+    # drop the ground truth column
+    X = data.drop(['label'], axis=1)
+    X = X[feature_cols]
+
+    # scaling data (converting values to z-scores)
+    X = StandardScaler().fit_transform(X)
+
+    clusterer = HDBSCAN(min_cluster_size=20)
+    cluster_labels = clusterer.fit_predict(X)
+
+    # creating umap object
+    umap_2d = UMAP(n_components=2,
+                   n_neighbors=15,
+                   min_dist=0.1,
+                   metric='canberra',
+                   random_state=42)
+
+    # getting 3d projection
+    proj_2d = umap_2d.fit_transform(X)
+
+    # transposing array
+    umap_results = proj_2d.transpose()
+
+    # extracting values from umap results
+    umap1, umap2 = umap_results
+
+    # adding umap cols
+    data['UMAP1'] = umap1
+    data['UMAP2'] = umap2
+
+    # ax = scatterplot(data=data,
+    #                  x=data['UMAP1'],
+    #                  y=data['UMAP2'],
+    #                  hue='label',
+    #                  palette=color_palette(['#2ca02c', '#1f77b4', '#ff7f0e', '#d62728']),
+    #                  hue_order=['Normal', 'Quiescent', 'Fully Senescent', 'Senescent-like']
+    #                  )
+    # plt.xlabel('UMAP1')
+    # plt.ylabel('UMAP2')
+    # plt.grid(False)
     #
     # plt.show()
-    #
-    # fig, ax = plt.subplots(figsize=(25, 25))
-    # ConfusionMatrixDisplay.from_predictions(y_train, y_pred_train, ax=ax)
-    # ax.xaxis.set_ticklabels(class_names)
-    # ax.yaxis.set_ticklabels(class_names)
-    # _ = ax.set_title('Classification Confusion Matrix Train')
-    #
-    # plt.show()
-    # # get accuracy
-    # acc_train = accuracy_score(y_train, y_pred_train)
-    #
-    # # get balanced accuracy
-    # bal_accuracy_train = balanced_accuracy_score(y_train, y_pred_train)
-    #
-    # # get precisions
-    # global_precision_train = precision_score(y_train, y_pred_train, average='micro')
-    # weighted_precision_train = precision_score(y_train, y_pred_train, average='weighted')
-    #
-    # # get recalls
-    # global_recall_train = recall_score(y_train, y_pred_train, average='micro')
-    # weighted_recall_train = recall_score(y_train, y_pred_train, average='weighted')
-    #
-    # # get f1-score
-    # global_f1_train = f1_score(y_train, y_pred_train, average='micro')
-    # weighted_f1_train = f1_score(y_train, y_pred_train, average='weighted')
-    #
-    # # repeat model prediction and metrics for test set
-    # y_pred = clf.predict(X_test)
-    #
-    # # confusion matrix
-    # fig, ax = plt.subplots(figsize=(25, 25))
-    # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax, normalize='true')
-    # ax.xaxis.set_ticklabels(class_names)
-    # ax.yaxis.set_ticklabels(class_names)
-    # _ = ax.set_title('Classification Confusion Matrix Normalized Test')
-    #
-    # plt.show()
-    #
-    # fig, ax = plt.subplots(figsize=(25, 25))
-    # ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
-    # ax.xaxis.set_ticklabels(class_names)
-    # ax.yaxis.set_ticklabels(class_names)
-    # _ = ax.set_title('Classification Confusion Matrix Test')
-    #
-    # plt.show()
-    #
-    # # get accuracy
-    # accuracy = accuracy_score(y_test, y_pred)
-    #
-    # # get balanced accuracy
-    # bal_accuracy = balanced_accuracy_score(y_test, y_pred)
-    #
-    # # get precisions
-    # global_precision = precision_score(y_test, y_pred, average='micro')
-    # weighted_precision = precision_score(y_test, y_pred, average='weighted')
-    #
-    # # get recalls
-    # global_recall = recall_score(y_test, y_pred, average='micro')
-    # weighted_recall = recall_score(y_test, y_pred, average='weighted')
-    #
-    # # get f1-score
-    # global_f1 = f1_score(y_test, y_pred, average='micro')
-    # weighted_f1 = f1_score(y_test, y_pred, average='weighted')
-    #
-    # # make a dict
-    # metrics_dict = {'accuracy_train': acc_train,
-    #                 'bal_accuracy_train': bal_accuracy_train,
-    #                 'global_precision_train': global_precision_train,
-    #                 'weighted_precision_train': weighted_precision_train,
-    #                 'global_recall_train': global_recall_train,
-    #                 'weighted_recall_train': weighted_recall_train,
-    #                 'global_f1_score_train': global_f1_train,
-    #                 'weighted_f1_score_train': weighted_f1_train,
-    #                 'accuracy_test': accuracy,
-    #                 'bal_accuracy_test': bal_accuracy,
-    #                 'global_precision_test': global_precision,
-    #                 'weighted_precision_test': weighted_precision,
-    #                 'global_recall_test': global_recall,
-    #                 'weighted_recall_test': weighted_recall,
-    #                 'global_f1_score_test': global_f1,
-    #                 'weighted_f1_score_test': weighted_f1
-    #                 }
-    # print(metrics_dict)
-    #
-    # # assembling contour df, i.e, making a row
-    # metrics_df = DataFrame(metrics_dict, index=[0])  # noqa
-    #
-    # # getting feature importance
-    # feature_importance = DataFrame(clf.feature_importances_,
-    #                                index=feature_cols).sort_values(0, ascending=False)
-    #
-    # # saving metrics and feature dfs
-    # # create the path to save
-    # output_metrics = join(output_folder,
-    #                       'metrics_output.csv')
-    #
-    # output_featimp = join(output_folder,
-    #                       'feat_importance_output.csv')
-    # # saving df
-    # metrics_df.to_csv(output_metrics, index=False)
-    #
-    # feature_importance.to_csv(output_featimp, index=False)
-    #
-    # # plottings
-    #
-    # feature_importance.plot(kind='bar')
-    # plt.show()
-    #
-    # output_tree = join(output_folder,
-    #                    'tree.png')
-    # dot_data = StringIO()
-    # export_graphviz(clf, out_file=dot_data,
-    #                 feature_names=feature_cols,
-    #                 class_names=class_names,
-    #                 filled=True, rounded=True,
-    #                 special_characters=True)
-    # graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
-    # graph.write_png('decision_tree.png')
+
+    clustered = (cluster_labels >= 0)
+    # plt.scatter(data['UMAP1'],
+    #             data['UMAP2'],
+    #             c=data['label'],
+    #             s=0.1,
+    #             alpha=0.5)
+    plt.scatter(data['UMAP1'],
+                data['UMAP2'],
+                c=cluster_labels,
+                s=0.1,
+                cmap='viridis')
+    plt.show()
+
+    return
 
 #####################################################################
 # argument parsing related functions
@@ -299,8 +257,12 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    run_kmeans(input_path=input_path,
-               output_folder=output_folder
+    # run_kmeans(input_path=input_path,
+    #            output_folder=output_folder
+    #            )
+
+    run_hdbscan(input_path=input_path,
+                output_folder=output_folder
                )
 
 
