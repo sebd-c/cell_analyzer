@@ -7,41 +7,102 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import violinplot
+from seaborn import scatterplot
+from seaborn import color_palette
 import matplotlib.pyplot as plt
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_execution_parameters
+from sklearn.manifold import TSNE
 
 
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-def plot_violins(input_path: str
-                 ) -> None:
+
+def plot_tsne(input_path: str
+              ) -> None:
     # read data
     data = read_pickle(input_path)
 
-    # split data to plot into different graphs
+    data_wo_labels = data.drop(columns=['image_name', 'cons_xgal', 'cons_sstatus', 'label', 'tx', 'obj_id'])
+
+    data_embedded = TSNE(n_components=2,
+                         learning_rate='auto',
+                         init='random',
+                         perplexity=3,
+                         verbose=1).fit_transform(data_wo_labels)
+
+    plt.figure(figsize=(16, 10))
+    scatterplot(
+        x=data_embedded[:, 0], y=data_embedded[:, 1],
+        hue=data['label'],
+        palette=color_palette("bright"),
+        data=data,
+        alpha=0.3
+    )
+    plt.legend(title='Classes', labels=['Normal', 'Quiescent', 'Fully senescent', 'Senescent-like'])
+    plt.show()
+    plt.close()
+
+
+def plot_distributions(input_path: str
+                       ) -> None:
+    # read data
+    data = read_pickle(input_path)
+
+    # split data to plot into different plotters
     tmz = data[data['tx'] == 'tmz']
     ctr = data[data['tx'] == 'ctr']
 
-    features = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
-                'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
-                'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii',
-                'label', 'cons_xgal', 'cons_sstatus'
-                ]
     # plotting
-    for feature in features:
-        violinplot(data=data, y=feature, hue=data['tx'], inner="point")
-        plt.title(f"{caminho}/{nome_arquivo}")
-        plt.xlabel('Cytoplasm Irregularity Index')
-        plt.ylabel('Cytoplasm Area')
-        plt.grid(False)
-        plt.show()
-        plt.show()
-        plt.close()
+    plot = scatterplot(data=tmz,
+                       x='cii',
+                       y='cyto_area',
+                       hue='nii',
+                       palette='dark:#5A9_r',
+                       size='nuc_area')
+    # Set axis limits
+    plt.xlim(0, 200)  # Set x-axis limits
+    plt.ylim(0, 200000)  # Set y-axis limits
+    plt.title('CellMorph TMZ')
+    plt.xlabel('Cytoplasm Irregularity Index')
+    plt.ylabel('Cytoplasm Area')
+    plt.grid(False)
+    plt.show()
+    plt.show()
+    plt.close()
+
+    plot = scatterplot(data=ctr,
+                       x='cii',
+                       y='cyto_area',
+                       hue='nii',
+                       palette='dark:#5A9_r',
+                       size='nuc_area')
+    # Set axis limits
+    plt.xlim(0, 200)  # Set x-axis limits
+    plt.ylim(0, 200000)  # Set y-axis limits
+    plt.title('CellMorph CTR')
+    plt.xlabel('Cytoplasm Irregularity Index')
+    plt.ylabel('Cytoplasm Area')
+    plt.grid(False)
+    plt.show()
+    plt.show()
+    plt.close()
+
+
+# sns.displot(penguins, x="flipper_length_mm", hue="species")
+
+
+# def plot_pixint_per_gt(df: DataFrame) -> None:
+#     scatterplot(data=df, x="ii", y="area", hue="xgal")
+#     plt.xlabel('Irregularity Index')
+#     plt.ylabel('Area')
+#     plt.grid(False)
+#     plt.show()
+#     plt.show()
+#     plt.close()
 
 
 #####################################################################
@@ -93,7 +154,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_violins(input_dataframe)
+    plot_tsne(input_dataframe)
 
 
 ######################################################################

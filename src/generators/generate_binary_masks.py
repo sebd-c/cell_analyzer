@@ -245,7 +245,7 @@ def get_args_dict() -> dict:
                         dest='upper_threshold',
                         type=int,
                         required=False,
-                        default=65536,  # maximum value for 16-bit image
+                        default=255,  # maximum value for 8-bit image
                         help='defines maximum pixel intensity threshold to be used in mask generation')
 
     # min size param

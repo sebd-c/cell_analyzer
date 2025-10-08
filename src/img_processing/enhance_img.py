@@ -27,6 +27,8 @@ def enhance_single_img(og_img_path: str,
     """
     img = imread(og_img_path, IMREAD_GRAYSCALE)
 
+    clip_limit = int(clip_limit)
+    tile_size = int(tile_size)
     # create a CLAHE object
     clahe = createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
 
@@ -171,7 +173,9 @@ def main():
     # running function to preprocess images in a folder
     enhance_dir_imgs(input_folder=input_folder,
                      output_folder=output_folder,
-                     img_extension=images_extension)
+                     img_extension=images_extension,
+                     clip_limit=clip_limit,
+                     tile_size=tile_size)
 
 
 ######################################################################

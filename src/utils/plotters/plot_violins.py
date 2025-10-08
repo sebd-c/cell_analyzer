@@ -7,10 +7,8 @@
 #             print(identities_matrix_df)
 ###########################################################################################
 # imports
-from seaborn import scatterplot
+from seaborn import violinplot
 import matplotlib.pyplot as plt
-from pandas import DataFrame
-from pandas import read_csv
 from pandas import read_pickle
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
@@ -20,63 +18,30 @@ from src.utils.aux_funcs import print_execution_parameters
 ################################################################################################
 # module of aux functions related to img preprocessing
 
-
-def plot_reds(input_path: str
-              ) -> None:
-    # read data
-    data = read_pickle(input_path)
-    scatterplot(data=data, x="cyto_red_max", y="nuc_red_max", hue="tx")
-    plt.xlabel('Max Red Pixel Value from Cytoplasm')
-    plt.ylabel('Max Red Pixel Value from Cytoplasm')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-
-def plot_cellmorph(input_path: str
-                   ) -> None:
+def plot_violins(input_path: str
+                 ) -> None:
     # read data
     data = read_pickle(input_path)
 
-    # split data to plot into different graphs
+    # split data to plot into different plotters
     tmz = data[data['tx'] == 'tmz']
     ctr = data[data['tx'] == 'ctr']
 
+    features = ['cyto_area', 'cyto_arbox', 'cyto_radra', 'cyto_asp',
+                'cyto_ecc', 'cyto_rou', 'cii', 'nuc_area', 'nuc_arbox',
+                'nuc_radra', 'nuc_asp', 'nuc_ecc', 'nuc_rou', 'nii',
+                'label', 'cons_xgal', 'cons_sstatus'
+                ]
     # plotting
-    plot = scatterplot(data=tmz,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph TMZ')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
-
-    plot = scatterplot(data=ctr,
-                       x='cii',
-                       y='cyto_area',
-                       hue='nii',
-                       palette='dark:#5A9_r',
-                       size='nuc_area')
-    # Set axis limits
-    plt.xlim(0, 200)  # Set x-axis limits
-    plt.ylim(0, 200000)  # Set y-axis limits
-    plt.title('CellMorph CTR')
-    plt.xlabel('Cytoplasm Irregularity Index')
-    plt.ylabel('Cytoplasm Area')
-    plt.grid(False)
-    plt.show()
-    plt.show()
-    plt.close()
+    for feature in features:
+        violinplot(data=data, y=feature, hue=data['tx'], inner="point")
+        plt.title(f"{caminho}/{nome_arquivo}")
+        plt.xlabel('Cytoplasm Irregularity Index')
+        plt.ylabel('Cytoplasm Area')
+        plt.grid(False)
+        plt.show()
+        plt.show()
+        plt.close()
 
 
 #####################################################################
@@ -128,7 +93,7 @@ def main():
 
     # running function to preprocess images in a folder
     # plot_reds(input_dataframe)
-    plot_cellmorph(input_dataframe)
+    plot_violins(input_dataframe)
 
 
 ######################################################################
