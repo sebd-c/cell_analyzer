@@ -10,6 +10,8 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from pandas import DataFrame
+from scipy.spatial import cKDTree
+from numpy import min
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import print_execution_parameters
@@ -31,10 +33,97 @@ def make_img_class_counts(image_df: DataFrame,
     # since there are repeated cytoplasms, delete duplicates to make a unique df
     unique_df = image_df.drop_duplicates(subset=['image_name', 'cyto_id'], keep='first')
 
-    for index, row in unique_df.iterrows():
+    # establish lists to hold distances between classes
+    # n = normal; q = quiescent; fs = fully-senescent; sl = senescent-like
 
-        # cal min distance between this object and all the others
-        pass
+    # normal to others
+    nn_dist_list = []
+    nq_dist_list = []
+    nfs_dist_list = []
+    nsl_dist_list = []
+
+    # quiescent to others
+    qq_dist_list = []
+    qfs_dist_list = []
+    qsl_dist_list = []
+
+    # fully senescent to others
+    fsfs_dist_list = []
+    fssl_dist_list = []
+
+    # senescent like to others
+    slsl_dist_list = []
+
+    for index_1, row_1 in unique_df.iterrows():
+
+        # get contour of 1st object
+        contour_1 = row_1['cyto_contour']
+
+        # get its list of coordinates
+        coords_1 = contour_1.reshape(-1, 2)
+
+        # get df to loop on (which is all of it except the row already in contour)
+        subtracted_df = unique_df.drop(index_1)
+
+        # get row 1 class
+        class_1 = row_1['label']
+        # loop to get all other objects
+        for index_2, row_2 in subtracted_df.iterrows():
+
+            # get row 2 class
+            class_2 = row_2['label']
+
+            # get contour of 2st object
+            contour_2 = row_2['cyto_contour']
+
+            # get its list of coordinates
+            coords_2 = contour_2.reshape(-1, 2)
+
+            # Build KDTree for the second contour
+            tree = cKDTree(coords_2)
+
+            # Query nearest neighbor for each point in contour1
+            distances, _ = tree.query(coords_1, k=1)
+
+            # Smallest distance between contours
+            min_distance = min(distances)
+
+            # assign to which list append the distance:
+            # n x n
+            if class_1 == 0 and class_2 == 0:
+                nn_dist_list.append(min_distance)
+            # n x q
+            elif class_1 == 0 and class_2 == 1:
+                nq_dist_list.append(min_distance)
+            # n x fs
+            elif class_1 == 0 and class_2 == 2:
+                nfs_dist_list.append(min_distance)
+            # n x sl
+            elif class_1 == 0 and class_2 == 3:
+                nsl_dist_list.append(min_distance)
+            # q x q
+            elif class_1 == 1 and class_2 == 1:
+                qq_dist_list.append(min_distance)
+            # q x fs
+            elif class_1 == 1 and class_2 == 2:
+                qfs_dist_list.append(min_distance)
+            # q x sl
+            elif class_1 == 1 and class_2 == 3:
+                qsl_dist_list.append(min_distance)
+            # fs x fs
+            elif class_1 == 2 and class_2 == 2:
+                fsfs_dist_list.append(min_distance)
+            # fs x sl
+            elif class_1 == 2 and class_2 == 3:
+                fssl_dist_list.append(min_distance)
+            # sl x sl
+            elif class_1 == 3 and class_2 == 3:
+                slsl_dist_list.append(min_distance)
+
+    # organize in dict format
+    #TODO: vc parou aq
+    pass
+
 
     # returns single row of dataframe
     return classes_dict
