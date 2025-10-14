@@ -10,6 +10,8 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from pandas import DataFrame
+from pandas import concat
+from pandas import read_pickle
 from scipy.spatial import cKDTree
 from numpy import min
 from src.utils.aux_funcs import enter_to_continue
@@ -21,13 +23,9 @@ print('all required libraries successfully imported.')  # noqa
 
 
 #####################################################################
-def make_img_class_counts(image_df: DataFrame,
-                          classes_dict: dict
-                          ) -> dict:
+def make_img_class_counts(image_df: DataFrame) -> DataFrame:
     """
-    Given a dataframe of the objects of a single image,
-    returns a dictionary of classes in which the values
-    are a list of distances of objects
+
     """
 
     # since there are repeated cytoplasms, delete duplicates to make a unique df
@@ -73,7 +71,7 @@ def make_img_class_counts(image_df: DataFrame,
             # get row 2 class
             class_2 = row_2['label']
 
-            # get contour of 2st object
+            # get contour of 2nd object
             contour_2 = row_2['cyto_contour']
 
             # get its list of coordinates
@@ -121,199 +119,74 @@ def make_img_class_counts(image_df: DataFrame,
                 slsl_dist_list.append(min_distance)
 
     # organize in dict format
-    #TODO: vc parou aq
-    pass
+    dist_classes_dict = {'nn_dist': nn_dist_list,
+                         'nq_dist': nq_dist_list,
+                         'nfs_dist': nfs_dist_list,
+                         'nsl_dist': nsl_dist_list,
+                         'qq_dist': qq_dist_list,
+                         'qfs_dist': qfs_dist_list,
+                         'qsl_dist': qsl_dist_list,
+                         'fsfs_dist': fsfs_dist_list,
+                         'fssl_dist': fssl_dist_list,
+                         'slsl_dist': slsl_dist_list,
+                        }
 
-
+    # assembling contour df, i.e, making a row
+    dist_classes_df = DataFrame(dist_classes_dict, index=[0])  # noqa
     # returns single row of dataframe
-    return classes_dict
+    return dist_classes_df
 
 
-def process_contour_phase(single_contour_img: ndarray,
-                          mask_name: str,
-                          pixint: float,
-                          image: ndarray,
-                          phase_red: ndarray,
-                          phase_green: ndarray,
-                          phase_blue: ndarray
-                          ) -> DataFrame:
+def make_folder_class_counts(folder_df: DataFrame) -> DataFrame:
     """
-    Given an array of a single contour
-    :param pixint:
-    :param mask_name:
-    :param single_contour_img:
-    :param image:
-    :param phase_red:
-    :param phase_green:
-    :param phase_blue:
-    :return:
     """
+    # get list of image names to loop
+    image_names = folder_df.groupby(['image_name'])
 
-    # getting pixel intensities for each channel
-    phase_red_intensity = phase_red[single_contour_img == 1]
-    phase_green_intensity = phase_green[single_contour_img == 1]
-    phase_blue_intensity = phase_blue[single_contour_img == 1]
-    og_intensity = image[single_contour_img == 1]
+    # create an empty list to hold the single imgs df
+    images_dist_df_list = []
 
-    # transforming it in list formatting
-    # phase_red_intensity = phase_red_intensity.flatten()
-    # phase_green_intensity = phase_green_intensity.flatten()
-    # phase_blue_intensity = phase_blue_intensity.flatten()
-    # og_intensity = og_intensity.flatten()
+    # loop through all images
+    for image_name in image_names:
+        # separate df by img
+        image_df = folder_df[folder_df['image_name'] == image_name]
 
-    # converting int type
-    single_contour_img = single_contour_img.astype(np_uint8)
+        # get distances dict per img
+        image_dists_df = make_img_class_counts(image_df=image_df)
 
-    # finding contour in image
-    contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+        # appending current df to dfs list
+        images_dist_df_list.append(image_dists_df)
 
-    # loop in single contour to extract parameters
-    single_contour_df = make_img_class_counts(contour=contour[0],
-                                              pixel_int=pixint,
-                                              mask_name=mask_name,
-                                              flag=1,
-                                              pixint_list=og_intensity,
-                                              phase_red_list=phase_red_intensity,
-                                              phase_green_list=phase_green_intensity,
-                                              phase_blue_list=phase_blue_intensity
-                                              )
-    rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
-    single_contour_df.drop(rows_to_delete, inplace=True)
+    # concat the list of dfs into a single df
+    concat_images_dist_df = concat(images_dist_df_list, ignore_index=True)
 
-    if not len(single_contour_df) == 0:
-        # put label
-        make_contour_label(contour_index=int(pixint),
-                           centroid_x=single_contour_df['cx_coords'].iloc[0],
-                           centroid_y=single_contour_df['cy_coords'].iloc[0],
-                           color=255,
-                           thickness=2,
-                           img_to_label=image,
-                           contour=contour[0],
-                           )
-    else:
-        pass
 
-    # put label
-    # make_contour_label(contour_index=int(pixint),
-    #                    centroid_x=single_contour_df['cx_coords'].iloc[0],
-    #                    centroid_y=single_contour_df['cy_coords'].iloc[0],
-    #                    color=255,
-    #                    thickness=2,
-    #                    img_to_label=image,
-    #                    contour=contour[0],
-    #                    )
-
-    # returns the contours and the list of intensities
-    return single_contour_df
+    return concat_images_dist_df
 
 
 # module specific aux functions
-def make_image_contours_df(mask_name: str,
-                           mask_path: str,
-                           og_img_path: str,
-                           p_img_path: str,
-                           overlays_output_folder: str
-                           ) -> DataFrame:
-    """
-    Given a path to a binary image,
-    finds contours and
-    returns data frame containing
-    contours desired infos.
+def plot_folder_class_hist(contours_pickle_path: str,
+                           output_folder: str
+                           ) -> None:
     """
 
-    # read the rgb channel
-    phase_image_cv2 = imread(p_img_path,
-                             -1)
+    """
+
+    # read pickle with object infos
+    contours_df = read_pickle(contours_pickle_path)
 
     # convert it to the accurate colors
-    phase_image = cvtColor(phase_image_cv2, COLOR_BGR2RGB)
+    images_dist_df = make_folder_class_counts(folder_df=contours_df)
 
-    # separate channels
-    phase_red, phase_green, phase_blue = split(phase_image)
+    # getting pairs of histograms to be plotted
+    pairs_list = images_dist_df.columns
 
-    # reading grayscale image
-    image = imread(og_img_path,
-                   -1)
+    # plotting histogram
+    for pair in pairs_list:
 
-    # reading mask
-    mask = tifffile.imread(mask_path)
 
-    # relabel img as to separate loose pixels
-    mask = label(mask)
 
-    # # make it uint8 for morphological operations
-    mask = mask.astype(np_uint8)
-
-    # define kernel for morphological operations
-    kernel = np.ones((3, 3), np_uint8)
-
-    # remove small objects
-    mask = remove_small_objects(mask)
-
-    # close small holes (same library was not used for need of int types instead of booleans)
-    mask = morphologyEx(mask, MORPH_CLOSE, kernel)
-
-    # flattened_contour_img = mask.flatten()
-    # unique_val, counts = unique(flattened_contour_img, return_counts=True)
-    # print(dict(zip(unique_val, counts)))
-    # exit()
-    # print(type(mask))
-    # exit()
-
-    # test output
-    overlays_output_path = join(overlays_output_folder, mask_name)
-    imwrite(overlays_output_path, mask)
-    # exit()
-
-    # getting intensity range to
-    # separate contours before binarizing mask
-    valid_pixint_list = get_unique_ids(mask)
-    # max_intensity = mask.max()  # noqa
-
-    # getting shape for new masks arrays
-    shape = mask.shape
-
-    # create an empty list to hold the single contours df
-    contours_df_list = []
-
-    # loop not to join different contours
-    for pixel_intensity in valid_pixint_list:
-        # create a new blank img
-        single_contour_img = np.zeros(shape)
-
-        # putting the contour inside
-        single_contour_img[mask == pixel_intensity] = 1
-
-        flattened_contour_img = single_contour_img.flatten()
-        unique_val, counts = unique(flattened_contour_img, return_counts=True)
-        print(dict(zip(unique_val, counts)))
-
-        # choose which way the function should be continued
-        # if the parameter for phase was set,
-        # means the analysis is being done in phase img,
-        # and requires extraction of the rgb channels
-        contour_df = process_contour_phase(single_contour_img=single_contour_img,
-                                           mask_name=mask_name,
-                                           pixint=pixel_intensity,
-                                           image=image,
-                                           phase_red=phase_red,
-                                           phase_green=phase_green,
-                                           phase_blue=phase_blue
-                                           )
-
-        # appending current df to dfs list
-        contours_df_list.append(contour_df)
-
-    # concat the list of dfs into a single df
-    concat_contours_df = concat(contours_df_list, ignore_index=True)
-
-    # save image with labels
-    overlays_output_path = join(overlays_output_folder, mask_name)
-
-    imwrite(overlays_output_path, image)
-
-    # returning contours df
-    return concat_contours_df
+    return
 
 
 def make_folder_contours_df(masks_input_folder: str,
