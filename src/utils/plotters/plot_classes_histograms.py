@@ -14,6 +14,8 @@ from pandas import concat
 from pandas import read_pickle
 from scipy.spatial import cKDTree
 from numpy import min
+from seaborn import histplot
+import matplotlib.pyplot as plt
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import print_execution_parameters
@@ -175,14 +177,29 @@ def plot_folder_class_hist(contours_pickle_path: str,
     # read pickle with object infos
     contours_df = read_pickle(contours_pickle_path)
 
-    # convert it to the accurate colors
+    # get df of distances per class
     images_dist_df = make_folder_class_counts(folder_df=contours_df)
 
-    # getting pairs of histograms to be plotted
-    pairs_list = images_dist_df.columns
+    prefixes = ['n', 'q', 'f', 's']
 
-    # plotting histogram
-    for pair in pairs_list:
+    prefix_dict = {'n': 'Normal',
+                   'q': 'Quiescent',
+                   'f': 'Fully Senescent',
+                   's': 'Senescent-Like'
+                  }
+    # Loop through each prefix and select corresponding columns
+    for prefix in prefixes:
+        # Select columns starting with the prefix
+        cols = [col for col in images_dist_df.columns if col.startswith(prefix)]
+        histplot(data=images_dist_df[cols], x="distance_in_pixels")
+        # Plot histograms of all selected columns together
+        df[cols].plot.hist(alpha=0.6, bins=30, figsize=(8, 5))
+        plt.title(f'Histogram of columns starting with "{prefix}"')
+        plt.xlabel('Value')
+        plt.ylabel('Frequency')
+        plt.legend(cols)
+        plt.tight_layout()
+        plt.show()
 
 
 
