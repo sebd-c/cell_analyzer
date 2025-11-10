@@ -214,7 +214,7 @@ def get_args_dict() -> dict:
                         dest='input_folder',
                         type=str,
                         required=True,
-                        help='defines path to folder containing fluorescence images')
+                        help='defines path to folder containing fluorescence clahed images')
 
     # images extension param
     parser.add_argument('-x', '--images-extension',

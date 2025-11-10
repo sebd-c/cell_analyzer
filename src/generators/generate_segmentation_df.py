@@ -492,7 +492,7 @@ def get_args_dict() -> dict:
     parser.add_argument('-i', '--images-folder',
                         dest='images_folder',
                         required=True,
-                        help='defines path to folder containing original images')
+                        help='defines path to folder containing original clahed images')
     # phase input folder param
     parser.add_argument('-p', '--phase-images-folder',
                         dest='phase_folder',
@@ -503,7 +503,7 @@ def get_args_dict() -> dict:
     parser.add_argument('-m', '--masks-folder',
                         dest='masks_folder',
                         required=True,
-                        help='defines path to folder containing cellpose masks outputs')
+                        help='defines path to folder containing grayscale masks')
 
     # images extension param
     parser.add_argument('-x', '--images-extension',
