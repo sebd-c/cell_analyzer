@@ -106,13 +106,13 @@ def get_args_dict() -> dict:
     parser.add_argument('-d', '--drug_dataframe_path',
                         dest='drug_dataframe_path',
                         required=True,
-                        help='defines path to folder containing .pickle of tratment condition')
+                        help='defines path to folder containing .pickle of treatment condition')
 
     # input folder param (drug df)
     parser.add_argument('-c', '--ctr_dataframe_path',
                         dest='ctr_dataframe_path',
                         required=True,
-                        help='defines path to folder containing overlayed nuclei images')
+                        help='defines path to folder containing .pickle of control condition')
 
     # label for drug df
     parser.add_argument('-l1', '--first_label',
