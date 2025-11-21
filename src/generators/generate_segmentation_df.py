@@ -27,6 +27,7 @@ from cv2 import MORPH_OPEN
 from cv2 import MORPH_CLOSE
 from cv2 import morphologyEx
 from cv2 import dilate
+from cv2 import drawContours
 from skimage.measure import label
 from skimage.morphology import diameter_opening
 from skimage.morphology import diameter_closing
@@ -46,6 +47,7 @@ from numpy import median
 from numpy import sum
 from numpy import unique
 from numpy import isin
+import builtins
 import tifffile
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_contour_centroid
@@ -66,6 +68,21 @@ print('all required libraries successfully imported.')  # noqa
 
 
 #####################################################################
+
+def create_ring_mask(shape: tuple, cx: int, cy: int, inner_radius: int, outer_radius: int) -> ndarray:
+    """
+    Creates a boolean mask with a ring shape.
+    shape: image.shape or (H, W)
+    cx, cy: centroid coordinates (x, y)
+    inner_r, outer_r: radii in pixels
+    returns boolean mask where True are pixels inside the ring (inner_r <= dist <= outer_r)
+    """
+    h, w = shape[0], shape[1]
+    yy, xx = np.ogrid[:h, :w]
+    dist2 = (xx - int(cx))**2 + (yy - int(cy))**2
+    mask = (dist2 >= (int(inner_radius) ** 2)) & (dist2 <= (int(outer_radius) ** 2))
+    return mask
+    
 def get_parameters_df(contour: ndarray,
                       pixel_int: float,
                       mask_name: str,
@@ -235,6 +252,32 @@ def process_contour_phase(single_contour_img: ndarray,
 
     # finding contour in image
     contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+    
+    area = contourArea(contour[0])
+    inner_radius = int(np.sqrt(builtins.max(area, 1) / np.pi))
+    outer_radius = int(inner_radius * 2)
+    cx, cy = get_contour_centroid(contour[0])
+    
+    ring_mask = create_ring_mask(shape=single_contour_img.shape[:2],
+                                 cx=int(cx),
+                                 cy=int(cy),
+                                 inner_radius=inner_radius,
+                                 outer_radius=outer_radius
+                                 )
+    phase_red_intensity = phase_red[ring_mask]
+    phase_green_intensity = phase_green[ring_mask]
+    phase_blue_intensity = phase_blue[ring_mask]
+    og_intensity = image[ring_mask]
+    
+    ring_contours, _ = findContours(ring_mask.astype(np_uint8),
+                                    RETR_EXTERNAL,
+                                    CHAIN_APPROX_NONE)
+    
+    drawContours(image,
+                 ring_contours,
+                 -1,
+                 color=255,
+                 thickness=2)
 
     # loop in single contour to extract parameters
     single_contour_df = get_parameters_df(contour=contour[0],
@@ -248,7 +291,6 @@ def process_contour_phase(single_contour_img: ndarray,
                                           )
     rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
     single_contour_df.drop(rows_to_delete, inplace=True)
-
     if not len(single_contour_df) == 0:
         # put label
         make_contour_label(contour_index=int(pixint),
@@ -410,6 +452,9 @@ def make_folder_contours_df(masks_input_folder: str,
     # analogous to phase imgs
     phase_files = get_files_in_folder(path_to_folder=phase_img_folder,
                                       extension=masks_img_extension)
+    
+    og_dict = {fname: join(og_img_folder, fname) for fname in og_files}
+    phase_dict = {fname: join(phase_img_folder, fname) for fname in phase_files}
 
     masks_files_num = len(mask_files)
 
@@ -433,16 +478,32 @@ def make_folder_contours_df(masks_input_folder: str,
         # getting current image mask input/output paths
         mask_input_path = join(masks_input_folder,
                                mask_file)
+        
+        if mask_file.endswith("_masks.tif"):
+            base_name = mask_file.replace("_masks", "")
+        else:
+            base_name = mask_file
+        
+        if base_name not in og_dict:
+            print(f"WARNING: {mask_file} NOT FOUND in images folder!")
+            continue
+
+        if base_name not in phase_dict:
+            print(f"WARNING: {mask_file} NOT FOUND in phase folder!")
+            continue
+
+        og_img_input_path = og_dict[base_name]
+        phase_img_input_path = phase_dict[base_name]
 
         # analogous getting current og image input/output paths
-        og_img_input_path = join(og_img_folder,
-                                 og_img_file
-                                 )
+        # og_img_input_path = join(og_img_folder,
+        #                          og_img_file
+        #                          )
 
         # analogous getting current og image input/output paths
-        phase_img_input_path = join(phase_img_folder,
-                                    phase_file
-                                    )
+        # phase_img_input_path = join(phase_img_folder,
+        #                             phase_file
+        #                             )
         # get image contour df and respective overlay-ed imgs
         image_df = make_image_contours_df(mask_name=mask_file,
                                           mask_path=mask_input_path,
@@ -492,18 +553,18 @@ def get_args_dict() -> dict:
     parser.add_argument('-i', '--images-folder',
                         dest='images_folder',
                         required=True,
-                        help='defines path to folder containing original images')
+                        help='defines path to folder containing original clahed images')
     # phase input folder param
     parser.add_argument('-p', '--phase-images-folder',
                         dest='phase_folder',
                         required=True,
-                        help='defines path to folder containing phase images')
+                        help='defines path to folder containing phase matched images')
 
     # input masks folder param
     parser.add_argument('-m', '--masks-folder',
                         dest='masks_folder',
                         required=True,
-                        help='defines path to folder containing cellpose masks outputs')
+                        help='defines path to folder containing grayscale connected masks')
 
     # images extension param
     parser.add_argument('-x', '--images-extension',

@@ -28,7 +28,7 @@ print('all required libraries successfully imported.')  # noqa
 
 def link_tx_dfs(drug_df: DataFrame,
                 ctr_df: DataFrame,
-                label_01: str,
+                label_01: str, # a da droga
                 label_02: str,
                 ) -> DataFrame:
     """

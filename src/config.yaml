@@ -1,0 +1,52 @@
+project_name: "morphometrics of senescent cells"
+base_input_folder: "/home/mariercolani/bolsa/dox_100_cocultura_mda_mrc5_07_01_25_d5_xgal/og_images/dox/1.1"
+base_output_folder: "C:/Users/Mariana/Downloads/outputs/outputs/ctr/1.1"
+
+enhance_img: 
+  input_folder: "nuclei/red_grayscale"
+  images_extension: ".tif"
+  clip_limit: 3
+  tile_size: 200
+  output_folder: "red_grayscale/clahed"
+  run: false
+
+histogram_matching:
+  input_folder: "phase"
+  images_extension: ".tif"
+  reference_image: "/home/mariercolani/bolsa/dox_100_cocultura_mda_mrc5_07_01_25_d5_xgal/og_images/dox/1.0/phase/B1"
+  output_folder: "hist_matched"
+  run: false
+
+binary_masks:
+  input_folder: "red_grayscale/clahed"
+  images_extension: ".tif"
+  lower_threshold: 40
+  upper_threshold: 255
+  min_size: 800
+  max_size: 200000
+  kernel_size: 5
+  output_folder: "red_grayscale/binary_masks"
+  run: false
+
+object_connector:
+  input_folder: "red_grayscale/binary_masks"
+  images_extension: ".tif"
+  output_folder: "red_grayscale/connected"
+  run: false
+
+segmentation:
+  images_folder: "red_grayscale/clahed"
+  phase_images_folder: "hist_matched"
+  masks_folder: "human_masks"
+  images_extension: ".tif"
+  output_csv: "test_segmentation_data"
+  overlay_folder: "test_segmentation_overlays"
+  run: true
+
+join_tx_df:
+  drug_df_path: "/home/mariercolani/Downloads/contours_df.pickle"
+  ctr_df_path: "/home/mariercolani/Downloads/human_masks"
+  drug_label: "dox 1.1"
+  ctr_label: "ctr 1.1"
+  output_folder: "new_test"
+  run: false
