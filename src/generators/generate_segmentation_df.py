@@ -58,8 +58,9 @@ from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import make_contour_label
 from src.utils.aux_funcs import get_unique_ids
-from src.utils.aux_funcs import get_coords
-from src.utils.aux_funcs import get_boundaries_mask
+from src.utils.aux_funcs import get_inscribed_rect_mask
+from src.utils.aux_funcs import get_lbp_rect
+from src.utils.aux_funcs import get_lbp_metrics
 
 
 print('all required libraries successfully imported.')  # noqa
@@ -248,6 +249,9 @@ def process_contour_phase(single_contour_img: ndarray,
                                           )
     rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
     single_contour_df.drop(rows_to_delete, inplace=True)
+
+    # get textural parameters of contour in different phase channel
+    get
 
     if not len(single_contour_df) == 0:
         # put label

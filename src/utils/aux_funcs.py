@@ -33,7 +33,9 @@ from cv2 import BORDER_CONSTANT
 from numpy import pad
 from math import pi
 from pandas import DataFrame
-from skimage.feature import graycomatrix, graycoprops
+from skimage.feature import graycomatrix
+from skimage.feature import graycoprops
+from skimage.feature import local_binary_pattern
 from os.path import join
 from scipy.ndimage import binary_erosion
 from scipy.ndimage import binary_dilation
@@ -1004,7 +1006,8 @@ def make_crop_rotate(image: ndarray,
 
 
 def get_inscribed_rect_mask(contour: ndarray,
-                       img_shape: tuple) -> ndarray:
+                            img_shape: tuple
+                            ) -> tuple:
     """
 
     :param img_shape:
@@ -1028,23 +1031,99 @@ def get_inscribed_rect_mask(contour: ndarray,
     rect_mask = np.zeros(img_shape)
 
     # get top left coordinates
-    tlx = int(round(mic_cx - mic_radius * (2 ** 0.5)))
-    tly = int(round(mic_cy + mic_radius * (2 ** 0.5)))
+    x1 = int(round(mic_cx - mic_radius * (2 ** 0.5)))
+    x2 = int(round(mic_cx + mic_radius * (2 ** 0.5)))
 
     # get bottom right coordinates
-    brx = int(round(mic_cx + mic_radius * (2 ** 0.5)))
-    bry = int(round(mic_cy - mic_radius * (2 ** 0.5)))
+    y1 = int(round(mic_cy - mic_radius * (2 ** 0.5)))
+    y2 = int(round(mic_cy + mic_radius * (2 ** 0.5)))
 
-    # draw square into empty mask
-    rect_mask = cv.rectangle(rect_mask, (tlx, tly), (brx, bry), 1, -1)
-
-    return rect_mask
+    return x1, x2, y1, y2
 
 
 def get_lbp_rect(image:ndarray,
-                 rect_mask: ndarray):
+                 x1: int,
+                 x2: int,
+                 y1: int,
+                 y2: int,
+                 points: int,
+                 radius: int,
+                 n_bins=None
+                 ):
 
-    pass
+    # create lbp 2d array
+    lbp_crop = image[y1:y2, x1:x2]
+
+    # compute LBP on internal cell crop
+    lbp = local_binary_pattern(lbp_crop, points, radius, 'uniform')
+
+    #
+    # Determine number of bins from max LBP value
+    if n_bins is None:
+        n_bins = int(lbp.max() + 1)
+
+    # Histogram
+    hist, _ = np.histogram(lbp.ravel(),
+                           bins=n_bins,
+                           range=(0, n_bins),
+                           density=True)
+
+    return hist
+
+
+def get_lbp_metrics(hist: ndarray) -> dict:
+    """
+    Convert an LBP histogram into multiple scalar metrics.
+
+    Metrics computed:
+    - entropy
+    - energy
+    - asm
+    - mean_code
+    - var_code
+    - skewness
+    - kurtosis
+
+    Parameters
+    ----------
+    hist : 1D ndarray LBP histogram (normalized or counts)
+
+    Returns
+    -------
+    dict
+        Dictionary of scalar metrics.
+    """
+
+    # Normalize histogram
+    h = hist.astype(float)
+    h = h / (h.sum() + 1e-12)
+    h_safe = h + 1e-12
+
+    # Bin indices
+    indices = np.arange(len(h))
+
+    # First-order metrics
+    mean_code = np.sum(indices * h)
+    var_code = np.sum(((indices - mean_code) ** 2) * h)
+
+    # Higher-order moments
+    skewness = np.sum(((indices - mean_code)**3) * h) / (var_code**1.5 + 1e-12)
+    kurtosis = np.sum(((indices - mean_code)**4) * h) / (var_code**2 + 1e-12)
+
+    # LBP-specific metrics
+    entropy = -np.sum(h_safe * np.log(h_safe))
+    asm = np.sum(h**2)
+    energy = np.sqrt(asm)
+
+    lbp_dict = {"lbp_entropy": float(entropy),
+                "lbp_energy": float(energy),
+                "lbp_asm": float(asm),
+                "lbp_mean_code": float(mean_code),
+                "lbp_var_code": float(var_code),
+                "lbp_skewness": float(skewness),
+                "lbp_kurtosis": float(kurtosis),
+                }
+    return lbp_dict
 
 
 def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
