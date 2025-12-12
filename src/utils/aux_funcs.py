@@ -48,6 +48,8 @@ from numpy import mean as arr_mean
 from numpy import median as arr_median
 from numpy import full
 
+import shapely
+from shapely import Polygon
 ######################################################################
 # defining auxiliary functions
 
@@ -1000,4 +1002,34 @@ def make_crop_rotate(image: ndarray,
     return oriented_crop
 
 
+def get_insc_rect_mask(contour: ndarray,
+                       img_shape: tuple) -> ndarray:
+    """
+
+    :param img_shape:
+    :param contour:
+    :return:
+    """
+    # transform opencv contour's into shapely polygon format
+    poly = Polygon(contour.reshape(-1, 2))
+
+    # create the maximum inscribed circle
+    mic = poly.maximum_inscribed_circle()
+
+    # get mic's centroid and radius
+    mic_centroid = mic.centroid.x, mic.centroid.y
+
+    mic_radius = mic.radius
+
+    # blank img to put the circle's mask
+    circle_mask = np.zeros(img_shape)
+
+    # put circle in mask
+    cv2.circle(circle_mask, mic_centroid, mic_radius, 255, -1)
+
+    # get all circle points
+    ys, xs = np.where(circle_mask)
+    circle_points = np.vstack([xs, ys]).astype(np.float32).reshape(-1, 1, 2)
+
+    return
 
