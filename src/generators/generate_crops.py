@@ -12,7 +12,9 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from os.path import join
-from cv2 import imread
+from cv2 import threshold, THRESH_BINARY
+import tifffile
+from cv2 import imread, normalize, NORM_MINMAX
 from cv2 import split
 from cv2 import FILLED
 from cv2 import imwrite
@@ -158,6 +160,14 @@ def make_image_crops(cyto_path: str,
     # reading grayscale image
     cyto_image = imread(cyto_path,
                         -1)
+    # croppar em cima d mascaras binarias de citoplasmas,
+    # daí passando a mask grayscale
+    # cyto_image = tifffile.imread(cyto_path)
+    #
+    # # converte para uint8 OU normaliza para uint8
+    # cyto_uint8 = normalize(cyto_image, None, 0, 255, NORM_MINMAX).astype("uint8")
+    #
+    # ret, cyto_image = threshold(cyto_uint8, 0, 255, THRESH_BINARY)
 
     # reading grayscale image
     nuc_image = imread(nuc_path,

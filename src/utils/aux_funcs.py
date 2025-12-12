@@ -37,16 +37,17 @@ from skimage.feature import graycomatrix, graycoprops
 from os.path import join
 from scipy.ndimage import binary_erosion
 from scipy.ndimage import binary_dilation
-from numpy import mean
-from numpy import median
-from numpy import min
 from numpy import unique
 from numpy import argwhere
 from numpy import min as arr_min
 from numpy import max as arr_max
 from numpy import mean as arr_mean
 from numpy import median as arr_median
+from numpy import sum as arr_sum
 from numpy import full
+import cv2
+import numpy as np
+# from typing import List, Tuple
 
 import shapely
 from shapely import Polygon
@@ -1002,7 +1003,7 @@ def make_crop_rotate(image: ndarray,
     return oriented_crop
 
 
-def get_insc_rect_mask(contour: ndarray,
+def get_inscribed_rect_mask(contour: ndarray,
                        img_shape: tuple) -> ndarray:
     """
 
@@ -1016,20 +1017,170 @@ def get_insc_rect_mask(contour: ndarray,
     # create the maximum inscribed circle
     mic = poly.maximum_inscribed_circle()
 
-    # get mic's centroid and radius
-    mic_centroid = mic.centroid.x, mic.centroid.y
+    # get mic's centroid
+    mic_cx = mic.centroid.x
+    mic_cy = mic.centroid.y
 
+    # and radius
     mic_radius = mic.radius
 
-    # blank img to put the circle's mask
-    circle_mask = np.zeros(img_shape)
+    # blank img to put the inscribed rect
+    rect_mask = np.zeros(img_shape)
 
-    # put circle in mask
-    cv2.circle(circle_mask, mic_centroid, mic_radius, 255, -1)
+    # get top left coordinates
+    tlx = int(round(mic_cx - mic_radius * (2 ** 0.5)))
+    tly = int(round(mic_cy + mic_radius * (2 ** 0.5)))
 
-    # get all circle points
-    ys, xs = np.where(circle_mask)
-    circle_points = np.vstack([xs, ys]).astype(np.float32).reshape(-1, 1, 2)
+    # get bottom right coordinates
+    brx = int(round(mic_cx + mic_radius * (2 ** 0.5)))
+    bry = int(round(mic_cy - mic_radius * (2 ** 0.5)))
 
-    return
+    # draw square into empty mask
+    rect_mask = cv.rectangle(rect_mask, (tlx, tly), (brx, bry), 1, -1)
+
+    return rect_mask
+
+
+def get_lbp_rect(image:ndarray,
+                 rect_mask: ndarray):
+
+    pass
+
+
+def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
+    """
+    Quantize an 8-bit grayscale image to a fixed number of gray levels.
+    """
+    # normalize img to 8-bit just in case
+    if image.dtype != np.uint8:
+        image = cv2.normalize(image, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # set binsize, considering that 256 will generate a lot of noise in the glcm matrix
+    # I believe that humanly, for 8 bit imgs, 8 levels would suffice,
+    # which means 32 for binsize is a good trying method
+    binsize = 256 / levels
+
+    # divide each pixel by bin size
+    quant = image // binsize
+
+    # safety case to prevent boundary cases
+    quant[quant >= levels] = levels - 1
+    return quant
+
+
+def masked_glcm(image: np.ndarray,
+                mask: np.ndarray,
+                distances: list,
+                angles: list,
+                levels: int
+                ) -> np.ndarray:
+    """
+    Compute a masked GLCM where both pixels of the pair must be inside the object's mask
+    Returns a 4D array: GLCM[level, level, distance_id, angle_id], where level is
+    the quantized gray-level index for each pixel in the pair
+    """
+    h, w = image.shape
+    glcm = np.zeros((levels, levels, len(distances), len(angles)), dtype=np.float64)
+
+    # pre-quantized image
+    quant = quantize_image(image, levels)
+
+    # list of mask pixel coordinates
+    ys, xs = np.where(mask > 0)
+    coords = np.vstack([ys, xs]).T
+
+    # iterate over all mask pixels
+    for d_i, d in enumerate(distances):
+        for a_i, angle in enumerate(angles):
+
+            # offset for this (distance, angle)
+            dy = int(round(np.sin(angle) * d))
+            dx = int(round(np.cos(angle) * d))
+
+            # to each pont get its neighbor with according offset
+            for y, x in coords:
+                y2 = y + dy
+                x2 = x + dx
+
+                # check image bounds and mask bounds
+                if 0 <= y2 < h and 0 <= x2 < w and mask[y2, x2] > 0:
+                    # if valid, get the quantized pixel version from image
+                    # to set the pair of bins
+                    i = quant[y, x]
+                    j = quant[y2, x2]
+                    # and update the glcm
+                    glcm[i, j, d_i, a_i] += 1
+
+    # Normalize each GLCM
+    for d_i in range(len(distances)):
+        for a_i in range(len(angles)):
+            total = glcm[:, :, d_i, a_i].sum()
+            if total > 0:
+                glcm[:, :, d_i, a_i] /= total
+
+    return glcm
+
+
+def glcm_properties(glcm: np.ndarray) -> dict:
+    """
+    Compute common GLCM properties for each (distance, angle).
+    Supports: contrast, dissimilarity, homogeneity, ASM, energy, correlation
+    """
+    levels = glcm.shape[0]
+    Ds = glcm.shape[2]
+    As = glcm.shape[3]
+
+    i, j = np.indices((levels, levels))
+
+    props = {}
+
+    for d in range(Ds):
+        for a in range(As):
+            P = glcm[:, :, d, a]
+
+            contrast = ((i - j)**2 * P).sum()
+            dissimilarity = (np.abs(i - j) * P).sum()
+            homogeneity = (P / (1 + (i - j)**2)).sum()
+            asm = (P**2).sum()
+            energy = np.sqrt(asm)
+
+            # correlation
+            mean_i = (i * P).sum()
+            mean_j = (j * P).sum()
+            std_i = np.sqrt(((i - mean_i)**2 * P).sum())
+            std_j = np.sqrt(((j - mean_j)**2 * P).sum())
+            if std_i * std_j == 0:
+                correlation = 0
+            else:
+                correlation = (((i - mean_i) * (j - mean_j) * P).sum()) / (std_i * std_j)
+
+            props[(d, a)] = dict(
+                contrast=contrast,
+                dissimilarity=dissimilarity,
+                homogeneity=homogeneity,
+                ASM=asm,
+                energy=energy,
+                correlation=correlation,
+            )
+
+    return props
+
+
+def get_fluorescent_metrics(pixint_list: list) -> dict:
+
+    # fluo_dict = {'grayscale_mean': arr_mean(pixint_list),
+    #              'grayscale_median':arr_median(pixint_list),
+    #              'grayscale_max':arr_max(),
+    #              'grayscale_min':,
+    #              'grayscale_sum':,
+    #              'grayscale_int_density':
+    #             }
+    # fluo_dict['grayscale_mean'] = mean(pixint_list)
+    # fluo_dict['grayscale_median'] = median(pixint_list)
+    # fluo_dict['grayscale_max'] = max(pixint_list)
+    # contour_dict['grayscale_min'] = min(pixint_list)
+    # contour_dict['grayscale_sum'] = sum(pixint_list)
+    # contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
+
+    pass
 
