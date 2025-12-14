@@ -49,6 +49,8 @@ from numpy import sum as arr_sum
 from numpy import full
 import cv2
 import numpy as np
+import pandas as pd
+from skimage.feature import greycoprops
 # from typing import List, Tuple
 
 import shapely
@@ -1041,7 +1043,7 @@ def get_inscribed_rect_mask(contour: ndarray,
     return x1, x2, y1, y2
 
 
-def get_lbp_rect(image:ndarray,
+def get_lbp_hist(image:ndarray,
                  x1: int,
                  x2: int,
                  y1: int,
@@ -1126,6 +1128,34 @@ def get_lbp_metrics(hist: ndarray) -> dict:
     return lbp_dict
 
 
+def run_lbp_metrics(image:ndarray,
+                    contour: ndarray) -> DataFrame:
+    """
+
+    :param image:
+    :param contour:
+    :return:
+    """
+    shape = image.shape
+
+    x1, x2, y1, y2 = get_inscribed_rect_mask(contour=contour,
+                                             img_shape=shape)
+
+    lbp_hist = get_lbp_hist(image=image,
+                            x1=x1,
+                            x2=x2,
+                            y1=y1,
+                            y2=y2,
+                            points=8,
+                            radius=1,
+                            )
+
+    lbp_dict = get_lbp_metrics(hist=lbp_hist)
+
+    lbp_df = DataFrame(lbp_dict, index=[0])
+
+    return lbp_df
+
 def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
     """
     Quantize an 8-bit grayscale image to a fixed number of gray levels.
@@ -1147,12 +1177,12 @@ def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
     return quant
 
 
-def masked_glcm(image: np.ndarray,
-                mask: np.ndarray,
-                distances: list,
-                angles: list,
-                levels: int
-                ) -> np.ndarray:
+def get_masked_glcm(image: np.ndarray,
+                    mask: np.ndarray,
+                    distances: list,
+                    angles: list,
+                    levels: int
+                    ) -> np.ndarray:
     """
     Compute a masked GLCM where both pixels of the pair must be inside the object's mask
     Returns a 4D array: GLCM[level, level, distance_id, angle_id], where level is
@@ -1200,49 +1230,64 @@ def masked_glcm(image: np.ndarray,
     return glcm
 
 
-def glcm_properties(glcm: np.ndarray) -> dict:
+def get_glcm_features(image: ndarray,
+                      mask: ndarray,
+                      levels: int,
+                      distances: list,
+                      angles_deg: list,
+                      ) -> DataFrame:
     """
-    Compute common GLCM properties for each (distance, angle).
-    Supports: contrast, dissimilarity, homogeneity, ASM, energy, correlation
+    Compute GLCM Haralick features that are:
+      - angle-invariant (mean over angles)
+      - distance-specific (one feature per distance)
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D uint8 grayscale image
+    mask : np.ndarray
+        Binary mask
+    levels : int
+        Number of gray levels
+    distances : list
+        GLCM distances (e.g. [1, 2, 3])
+    angles_deg : list
+        Angles in degrees
+
+    Returns
+    -------
+    pd.DataFrame
     """
-    levels = glcm.shape[0]
-    Ds = glcm.shape[2]
-    As = glcm.shape[3]
 
-    i, j = np.indices((levels, levels))
+    # Convert angles to radians
+    angles_rad = [np.deg2rad(a) for a in angles_deg]
 
-    props = {}
+    # Compute masked GLCM
+    glcm = get_masked_glcm(image=image,
+                           mask=mask,
+                           distances=distances,
+                           angles=angles_rad,
+                           levels=levels
+                           )
 
-    for d in range(Ds):
-        for a in range(As):
-            P = glcm[:, :, d, a]
+    properties = ["contrast",
+                  "dissimilarity",
+                  "homogeneity",
+                  "energy",
+                  "correlation",
+                  "ASM"
+                  ]
 
-            contrast = ((i - j)**2 * P).sum()
-            dissimilarity = (np.abs(i - j) * P).sum()
-            homogeneity = (P / (1 + (i - j)**2)).sum()
-            asm = (P**2).sum()
-            energy = np.sqrt(asm)
+    features = {}
 
-            # correlation
-            mean_i = (i * P).sum()
-            mean_j = (j * P).sum()
-            std_i = np.sqrt(((i - mean_i)**2 * P).sum())
-            std_j = np.sqrt(((j - mean_j)**2 * P).sum())
-            if std_i * std_j == 0:
-                correlation = 0
-            else:
-                correlation = (((i - mean_i) * (j - mean_j) * P).sum()) / (std_i * std_j)
+    for prop in properties:
+        vals = greycoprops(glcm, prop=prop)
 
-            props[(d, a)] = dict(
-                contrast=contrast,
-                dissimilarity=dissimilarity,
-                homogeneity=homogeneity,
-                ASM=asm,
-                energy=energy,
-                correlation=correlation,
-            )
+        for d_i, d in enumerate(distances):
+            # angle-invariant → mean over angles
+            features[f"glcm_{prop}_d{d}"] = vals[d_i, :].mean()
 
-    return props
+    return pd.DataFrame([features])
 
 
 def get_fluorescent_metrics(pixint_list: list) -> dict:

@@ -58,9 +58,8 @@ from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import make_contour_label
 from src.utils.aux_funcs import get_unique_ids
-from src.utils.aux_funcs import get_inscribed_rect_mask
-from src.utils.aux_funcs import get_lbp_rect
-from src.utils.aux_funcs import get_lbp_metrics
+from src.utils.aux_funcs import run_lbp_metrics
+from src.utils.aux_funcs import get_glcm_features
 
 
 print('all required libraries successfully imported.')  # noqa
@@ -251,7 +250,19 @@ def process_contour_phase(single_contour_img: ndarray,
     single_contour_df.drop(rows_to_delete, inplace=True)
 
     # get textural parameters of contour in different phase channel
-    get
+    single_lbp_df = run_lbp_metrics(image=phase_red,
+                                        contour=contour[0]
+                                        )
+
+    single_glcm_df = get_glcm_features(image=phase_red,
+                                       mask=single_contour_img,
+                                       levels=8,
+                                       distances=[1, 2,3],
+                                       angles_deg=[0, 45, 90, 135])
+
+    concat_metrics_df = concat([single_contour_df, single_lbp_df, single_glcm_df],
+                               axis=1,
+                               ignore_index=True)
 
     if not len(single_contour_df) == 0:
         # put label
@@ -266,18 +277,18 @@ def process_contour_phase(single_contour_img: ndarray,
     else:
         pass
 
-    # put label
-    # make_contour_label(contour_index=int(pixint),
-    #                    centroid_x=single_contour_df['cx_coords'].iloc[0],
-    #                    centroid_y=single_contour_df['cy_coords'].iloc[0],
-    #                    color=255,
-    #                    thickness=2,
-    #                    img_to_label=image,
-    #                    contour=contour[0],
-    #                    )
+        # put label
+        # make_contour_label(contour_index=int(pixint),
+        #                    centroid_x=single_contour_df['cx_coords'].iloc[0],
+        #                    centroid_y=single_contour_df['cy_coords'].iloc[0],
+        #                    color=255,
+        #                    thickness=2,
+        #                    img_to_label=image,
+        #                    contour=contour[0],
+        #                    )
 
     # returns the contours and the list of intensities
-    return single_contour_df
+    return concat_metrics_df
 
 
 # module specific aux functions
