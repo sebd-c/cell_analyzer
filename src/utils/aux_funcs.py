@@ -966,6 +966,7 @@ def make_crop(image: ndarray,
     return crop_padded
 
 
+
 def make_crop_rotate(image: ndarray,
                      x1: int or float,
                      x2: int or float,
@@ -1149,6 +1150,21 @@ def run_lbp_metrics(image:ndarray,
     lbp_df = DataFrame(lbp_dict, index=[0])
 
     return lbp_df
+
+
+def get_lbp_codes(image: ndarray,
+                  mask: ndarray
+                  ) -> list:
+    """
+
+    """
+    # list of mask pixel coordinates
+    ys, xs = np.where(mask > 0)
+    coords = np.vstack([ys, xs]).T
+
+    neighbor_count =
+    pass
+
 
 def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
     """
