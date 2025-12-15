@@ -251,8 +251,8 @@ def process_contour_phase(single_contour_img: ndarray,
 
     # get textural parameters of contour in different phase channel
     single_lbp_df = run_lbp_metrics(image=phase_red,
-                                        contour=contour[0]
-                                        )
+                                    contour=contour[0]
+                                    )
 
     single_glcm_df = get_glcm_features(image=phase_red,
                                        mask=single_contour_img,
@@ -261,8 +261,7 @@ def process_contour_phase(single_contour_img: ndarray,
                                        angles_deg=[0, 45, 90, 135])
 
     concat_metrics_df = concat([single_contour_df, single_lbp_df, single_glcm_df],
-                               axis=1,
-                               ignore_index=True)
+                               axis=1)
 
     if not len(single_contour_df) == 0:
         # put label

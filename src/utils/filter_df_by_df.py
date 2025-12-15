@@ -32,7 +32,8 @@ def merge_label_df(infos_df_path: str,
     infos_df = read_pickle(infos_df_path)
 
     labels_df = read_csv(labels_df_path)
-
+    infos_df['image_name'] = infos_df['image_name'].replace('green', '', regex=True)
+    infos_df.rename(columns={'contour_index': 'cyto_id'}, inplace=True)
     # now that we have both the complete df and the
     # filter the df using a left outer join
     labeled_df = infos_df.merge(labels_df,

@@ -50,11 +50,10 @@ from numpy import full
 import cv2
 import numpy as np
 import pandas as pd
-from skimage.feature import greycoprops
 # from typing import List, Tuple
 
-import shapely
 from shapely import Polygon
+from shapely import maximum_inscribed_circle
 ######################################################################
 # defining auxiliary functions
 
@@ -1008,7 +1007,6 @@ def make_crop_rotate(image: ndarray,
 
 
 def get_inscribed_rect_mask(contour: ndarray,
-                            img_shape: tuple
                             ) -> tuple:
     """
 
@@ -1020,17 +1018,14 @@ def get_inscribed_rect_mask(contour: ndarray,
     poly = Polygon(contour.reshape(-1, 2))
 
     # create the maximum inscribed circle
-    mic = poly.maximum_inscribed_circle()
+    mic = maximum_inscribed_circle(poly)
 
     # get mic's centroid
     mic_cx = mic.centroid.x
     mic_cy = mic.centroid.y
 
     # and radius
-    mic_radius = mic.radius
-
-    # blank img to put the inscribed rect
-    rect_mask = np.zeros(img_shape)
+    mic_radius = get_distance((mic_cx, mic_cy), mic.coords[0])
 
     # get top left coordinates
     x1 = int(round(mic_cx - mic_radius * (2 ** 0.5)))
@@ -1138,8 +1133,7 @@ def run_lbp_metrics(image:ndarray,
     """
     shape = image.shape
 
-    x1, x2, y1, y2 = get_inscribed_rect_mask(contour=contour,
-                                             img_shape=shape)
+    x1, x2, y1, y2 = get_inscribed_rect_mask(contour=contour)
 
     lbp_hist = get_lbp_hist(image=image,
                             x1=x1,
@@ -1170,7 +1164,7 @@ def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:
     binsize = 256 / levels
 
     # divide each pixel by bin size
-    quant = image // binsize
+    quant = (image // binsize).astype(np.int32)
 
     # safety case to prevent boundary cases
     quant[quant >= levels] = levels - 1
@@ -1275,13 +1269,14 @@ def get_glcm_features(image: ndarray,
                   "homogeneity",
                   "energy",
                   "correlation",
-                  "ASM"
+                  "ASM",
+                  "entropy"
                   ]
 
     features = {}
 
     for prop in properties:
-        vals = greycoprops(glcm, prop=prop)
+        vals = graycoprops(glcm, prop=prop)
 
         for d_i, d in enumerate(distances):
             # angle-invariant → mean over angles
