@@ -1152,6 +1152,18 @@ def run_lbp_metrics(image:ndarray,
     return lbp_df
 
 
+def smallest_binary_rotation(bits):
+    n = len(bits)
+    rotations = [
+        bits[i:] + bits[:i]
+        for i in range(n)
+    ]
+
+    code = "".join(map(str, min(rotations)))
+
+    return code
+
+
 def get_lbp_codes(image: ndarray,
                   mask: ndarray
                   ) -> list:
@@ -1162,8 +1174,42 @@ def get_lbp_codes(image: ndarray,
     ys, xs = np.where(mask > 0)
     coords = np.vstack([ys, xs]).T
 
-    neighbor_count =
-    pass
+    # lbp list of codes
+    codes_list = []
+    for coord in coords:
+        # neighbors offset
+        neighbor_list = [(coord[0] + 1, coord[1]), # up
+                         (coord[0] - 1, coord[1]), # down
+                         (coord[0], coord[1] - 1), # left
+                         (coord[0], coord[1] + 1), # right
+                         (coord[0] + 1, coord[1] + 1), # diag up right
+                         (coord[0] - 1, coord[1] + 1), # diag bot right
+                         (coord[0] + 1, coord[1] - 1), # diag up left
+                         (coord[0] - 1, coord[1] - 1)] # diag bot left
+
+        # get validity of neighborhood
+        values_at_coords = mask[neighbor_list]
+        points_per_value = np.bincount(values_at_coords)
+
+        # if it's a valid pixel
+        if points_per_value == 8:
+            coord_bin_list = []
+            # iterate over its neighbors
+            for neighbor in neighbor_list:
+                # to get the number code of it
+                if image[coord[0], coord[1]] > image[neighbor[0], neighbor[1]]:
+                    coord_bin_list.append(0)
+                else:
+                    coord_bin_list.append(1)
+
+            # make it invariant to rotation
+            inv_code = smallest_binary_rotation(coord_bin_list)
+
+            # append to list of codes
+            codes_list.append(inv_code)
+
+
+    return codes_list
 
 
 def quantize_image(image: np.ndarray, levels: int) -> np.ndarray:

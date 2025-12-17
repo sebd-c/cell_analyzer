@@ -256,8 +256,8 @@ def process_contour_phase(single_contour_img: ndarray,
 
     single_glcm_df = get_glcm_features(image=phase_red,
                                        mask=single_contour_img,
-                                       levels=8,
-                                       distances=[1, 2,3],
+                                       levels=32,
+                                       distances=[3, 6, 9, 18],
                                        angles_deg=[0, 45, 90, 135])
 
     concat_metrics_df = concat([single_contour_df, single_lbp_df, single_glcm_df],
