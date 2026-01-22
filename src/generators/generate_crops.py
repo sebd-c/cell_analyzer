@@ -22,6 +22,7 @@ from cv2 import boundingRect
 from cv2 import drawContours
 from pandas import DataFrame
 from pandas import read_pickle
+from pandas import concat
 from numpy import ndarray
 from numpy import uint8 as np_uint8
 from numpy import zeros as np_zeros
@@ -147,7 +148,8 @@ def make_image_crops(cyto_path: str,
                      max_height: int or float,
                      cyto_output_folder: str,
                      nuc_output_folder: str,
-                     phase_output_folder: str
+                     phase_output_folder: str,
+                     unique_df_output_folder: str
                      ) -> None:
     """
     Given a path to a grayscale image,
@@ -160,14 +162,6 @@ def make_image_crops(cyto_path: str,
     # reading grayscale image
     cyto_image = imread(cyto_path,
                         -1)
-    # croppar em cima d mascaras binarias de citoplasmas,
-    # daí passando a mask grayscale
-    # cyto_image = tifffile.imread(cyto_path)
-    #
-    # # converte para uint8 OU normaliza para uint8
-    # cyto_uint8 = normalize(cyto_image, None, 0, 255, NORM_MINMAX).astype("uint8")
-    #
-    # ret, cyto_image = threshold(cyto_uint8, 0, 255, THRESH_BINARY)
 
     # reading grayscale image
     nuc_image = imread(nuc_path,
@@ -188,18 +182,24 @@ def make_image_crops(cyto_path: str,
     # since there are repeated cytoplasms, delete duplicates to make a unique df
     unique_df = image_df.drop_duplicates(subset=['image_name', 'cyto_id'], keep='first')
 
+    crop_name_list = []
+
     # loop not to join different contours
     for index, row in unique_df.iterrows():
 
         # fixing name just for order
         split_img_name = image_name.split('.')
-        # making crop name for saving
-        crop_name = split_img_name[0] + '_' + str(row['cyto_id']) + '.' + split_img_name[1]
 
-        # naming df values
+        # making crop name for saving
+        crop_name = 'img_' + split_img_name[0] + '_crop_' + str(row['cyto_id']) + '.' + split_img_name[1]
+
+        # getting df values
         contour = row['cyto_contour']
         cx = row['cyto_cx']
         cy = row['cyto_cy']
+
+        # append new crop name to list
+        crop_name_list.append(crop_name)
 
         # make crops
         make_single_crop(image=cyto_image,
@@ -232,6 +232,15 @@ def make_image_crops(cyto_path: str,
                          crop_name=crop_name
                          )
 
+    # make new column in dataframe to maintain relation directly to crops
+    unique_df['crop_name'] = crop_name_list
+
+    # create the path to save the output path
+    output_path = join(unique_df_output_folder,
+                       'uniq_obj_df.pickle')
+
+    # saving df
+    unique_df.to_pickle(output_path)
 
     return
 
@@ -243,7 +252,8 @@ def make_folder_crops(cyto_input_folder: str,
                       df_path: str,
                       cyto_output_folder: str,
                       nuc_output_folder: str,
-                      phase_output_folder: str
+                      phase_output_folder: str,
+                      unique_df_output_folder: str
                       ) -> None:
     """
     Given a path to a folder containing
@@ -326,7 +336,8 @@ def make_folder_crops(cyto_input_folder: str,
                          max_height=max_height,
                          cyto_output_folder=cyto_output_folder,
                          nuc_output_folder=nuc_output_folder,
-                         phase_output_folder=phase_output_folder)
+                         phase_output_folder=phase_output_folder,
+                         unique_df_output_folder=unique_df_output_folder)
 
     # printing execution message
     print(f'output saved to {cyto_output_folder}')
@@ -374,6 +385,12 @@ def get_args_dict() -> dict:
                         dest='df_path',
                         required=True,
                         help='defines path to folder containing full df')
+
+    # segmentation dataframe input folder param
+    parser.add_argument('-o', '--output-folder',
+                        dest='output_folder',
+                        required=True,
+                        help='defines path to output folder to save df wo obj repetitions')
 
     # images extension param
     parser.add_argument('-x', '--images-extension',
@@ -428,6 +445,9 @@ def main():
     # path to segmentation dataframe
     df_path = args_dict['df_path']
 
+    # path to output folder
+    output_folder = args_dict['output_folder']
+
     # getting images extension
     images_extension = args_dict['images_extension']
 
@@ -457,7 +477,7 @@ def main():
                       cyto_output_folder=cyto_output_folder,
                       nuc_output_folder=nuclei_output_folder,
                       phase_output_folder=phase_output_folder,
-                      )
+                      unique_df_output_folder=output_folder)
 
 
 ######################################################################
