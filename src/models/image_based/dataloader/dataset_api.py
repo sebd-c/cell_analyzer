@@ -94,7 +94,7 @@ def get_args_dict() -> dict:
 ##################################################################################
 # data loader functions
 
-def collect_files(data_dir:str):
+def collect_files(data_dir: str, images_extension: str = ".tif"):
 
     # iterate through class folders names
     class_names = sorted([d for d in os.listdir(data_dir)
@@ -111,11 +111,47 @@ def collect_files(data_dir:str):
     for class_name in class_names:
         class_dir = os.path.join(data_dir, class_name)
         for file_path in os.listdir(class_dir):
-            if file_path.lower().endswith(".tif"):
+            if file_path.lower().endswith(images_extension.lower()):
                 file_paths.append(os.path.join(class_dir, file_path))
                 labels.append(class_to_idx[class_name])
 
     return file_paths, labels, class_names
+
+
+def collect_paired_files(data_dir_a: str,
+                         data_dir_b: str,
+                         images_extension: str = ".tif"):
+    class_names_a = {d for d in os.listdir(data_dir_a)
+                     if os.path.isdir(os.path.join(data_dir_a, d))}
+    class_names_b = {d for d in os.listdir(data_dir_b)
+                     if os.path.isdir(os.path.join(data_dir_b, d))}
+
+    class_names = sorted(class_names_a & class_names_b)
+    class_to_idx = {name: i for i, name in enumerate(class_names)}
+
+    file_paths_a = []
+    file_paths_b = []
+    labels = []
+
+    for class_name in class_names:
+        class_dir_a = os.path.join(data_dir_a, class_name)
+        class_dir_b = os.path.join(data_dir_b, class_name)
+
+        files_b = {
+            f.lower(): f for f in os.listdir(class_dir_b)
+            if f.lower().endswith(images_extension.lower())
+        }
+        for file_name in os.listdir(class_dir_a):
+            if not file_name.lower().endswith(images_extension.lower()):
+                continue
+            key = file_name.lower()
+            if key not in files_b:
+                continue
+            file_paths_a.append(os.path.join(class_dir_a, file_name))
+            file_paths_b.append(os.path.join(class_dir_b, files_b[key]))
+            labels.append(class_to_idx[class_name])
+
+    return file_paths_a, file_paths_b, labels, class_names
 
 
 def load_tiff_py(path):
@@ -125,6 +161,22 @@ def load_tiff_py(path):
     img = (img - img.min()) / (img.max() - img.min() + 1e-6)
 
     return img
+
+
+def load_tiff_pair_py(path_a, path_b):
+    img_a = tifffile.imread(path_a.decode("utf-8")).astype(np.float32)
+    img_b = tifffile.imread(path_b.decode("utf-8")).astype(np.float32)
+
+    img_a = (img_a - img_a.min()) / (img_a.max() - img_a.min() + 1e-6)
+    img_b = (img_b - img_b.min()) / (img_b.max() - img_b.min() + 1e-6)
+
+    if img_a.ndim == 2:
+        img_a = img_a[..., None]
+    if img_b.ndim == 2:
+        img_b = img_b[..., None]
+
+    img = np.concatenate([img_a, img_b], axis=-1)
+    return img.astype(np.float32)
 
 
 def load_tiff_tf(path, label):
@@ -137,6 +189,15 @@ def load_tiff_tf(path, label):
     return img, label
 
 
+def load_tiff_pair_tf(path_a, path_b, label):
+    img = tf.py_function(func=load_tiff_pair_py,
+                         inp=[path_a, path_b],
+                         Tout=tf.float32
+                         )
+    img.set_shape([None, None, None])
+    return img, label
+
+
 def preprocess(img, label, img_size, num_channels):
     # Ensure channel dim
     if tf.rank(img) == 2:
@@ -144,6 +205,12 @@ def preprocess(img, label, img_size, num_channels):
 
     # Enforce channel count if needed
     if num_channels is not None:
+        if num_channels > 1:
+            channels = tf.shape(img)[-1]
+            img = tf.cond(tf.equal(channels, 1),
+                          lambda: tf.repeat(img, num_channels, axis=-1),
+                          lambda: img,
+                          )
         img = img[..., :num_channels]
 
     if img_size is not None:
@@ -152,24 +219,38 @@ def preprocess(img, label, img_size, num_channels):
     return img, label
 
 
+def _get_data_dir(args):
+    return getattr(args, "data_dir", None) or getattr(args, "input_folder", None)
+
+
 def build_dataset(args):
-    file_paths, labels, class_names = collect_files(args.data_dir)
+    data_dir = _get_data_dir(args)
+    data_dir2 = getattr(args, "data_dir2", None) or getattr(args, "input_folder2", None)
+    images_extension = getattr(args, "images_extension", ".tif")
+    if data_dir2:
+        file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
+            data_dir, data_dir2, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, labels))
+        ds = tf.data.Dataset.from_tensor_slices((file_paths_a, file_paths_b, labels))
+        ds = ds.map(load_tiff_pair_tf, num_parallel_calls=tf.data.AUTOTUNE)
+    else:
+        file_paths, labels, class_names = collect_files(
+            data_dir, images_extension=images_extension
+        )
+        samples = list(zip(file_paths, labels))
 
-    ds = tf.data.Dataset.from_tensor_slices((file_paths, labels))
-
-    # Load + normalize TIFFs
-    ds = ds.map(
-        load_tiff_tf,
-        num_parallel_calls=tf.data.AUTOTUNE
-    )
+        ds = tf.data.Dataset.from_tensor_slices((file_paths, labels))
+        ds = ds.map(load_tiff_tf, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Shape, channels, resize
-    ds = ds.map(
-        lambda x, y: preprocess(x, y, args.img_size, args.num_channels),
-        num_parallel_calls=tf.data.AUTOTUNE
-    )
+    img_size = getattr(args, "img_size", None) or getattr(args, "image_size", None)
+    ds = ds.map(lambda x, y: preprocess(x, y, img_size, args.num_channels),
+                num_parallel_calls=tf.data.AUTOTUNE,
+                )
 
-    ds = ds.shuffle(args.shuffle_buffer)
+    shuffle_buffer = getattr(args, "shuffle_buffer", len(samples))
+    ds = ds.shuffle(shuffle_buffer)
     ds = ds.batch(args.batch_size)
     ds = ds.prefetch(tf.data.AUTOTUNE)
 
@@ -197,6 +278,10 @@ def split_samples(samples,
     return train, val, test
 
 
+def _get_sample_label(sample):
+    return sample[-1]
+
+
 def stratified_split(samples,
                      train_ratio:float = 0.7,
                      val_ratio:float = 0.15,
@@ -211,7 +296,7 @@ def stratified_split(samples,
 
     by_class = defaultdict(list)
     for sample in samples:
-        by_class[sample[1]].append(sample)
+        by_class[_get_sample_label(sample)].append(sample)
 
     train, val, test = [], [], []
 
@@ -244,7 +329,7 @@ def stratified_kfold_split(samples,
 
     by_class = defaultdict(list)
     for sample in samples:
-        by_class[sample[1]].append(sample)
+        by_class[_get_sample_label(sample)].append(sample)
 
     # shuffle within each class
     for cls_samples in by_class.values():
@@ -276,14 +361,21 @@ def make_tf_dataset(samples,
                     num_channels=None,
                     shuffle=False
                     ):
-    paths, labels = zip(*samples)
+    if len(samples[0]) == 3:
+        paths_a, paths_b, labels = zip(*samples)
+        ds = tf.data.Dataset.from_tensor_slices(
+            (list(paths_a), list(paths_b), list(labels))
+        )
+        ds = ds.map(load_tiff_pair_tf, num_parallel_calls=tf.data.AUTOTUNE)
+    else:
+        paths, labels = zip(*samples)
+        ds = tf.data.Dataset.from_tensor_slices((list(paths), list(labels)))
+        ds = ds.map(load_tiff_tf, num_parallel_calls=tf.data.AUTOTUNE)
 
-    ds = tf.data.Dataset.from_tensor_slices((list(paths), list(labels)))
-
-    ds = ds.map(load_tiff_tf, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.map(lambda x, y: preprocess(x, y, img_size, num_channels),
-                num_parallel_calls=tf.data.AUTOTUNE
-                )
+    ds = ds.map(
+        lambda x, y: preprocess(x, y, img_size, num_channels),
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
 
     if shuffle:
         ds = ds.shuffle(len(samples))
@@ -300,9 +392,20 @@ def build_benchmark_datasets(data_dir: str,
                              num_channels=None,
                              train_ratio=0.7,
                              val_ratio=0.15,
+                             data_dir2=None,
+                             images_extension=".tif",
                              seed=42
                              ):
-    _, samples, class_names = collect_files(data_dir)
+    if data_dir2:
+        file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
+            data_dir, data_dir2, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, labels))
+    else:
+        file_paths, labels, class_names = collect_files(
+            data_dir, images_extension=images_extension
+        )
+        samples = list(zip(file_paths, labels))
 
     train_s, val_s, test_s = split_samples(samples,
                                            train_ratio=train_ratio,
@@ -345,9 +448,20 @@ def build_stratified_benchmark(data_dir,
                                num_channels=None,
                                train_ratio=0.7,
                                val_ratio=0.15,
+                               data_dir2=None,
+                               images_extension=".tif",
                                seed=42
                                ):
-    _, samples, class_names = collect_files(data_dir)
+    if data_dir2:
+        file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
+            data_dir, data_dir2, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, labels))
+    else:
+        file_paths, labels, class_names = collect_files(
+            data_dir, images_extension=images_extension
+        )
+        samples = list(zip(file_paths, labels))
 
     train_s, val_s, test_s = stratified_split(samples,
                                               train_ratio=train_ratio,
@@ -378,9 +492,20 @@ def build_stratified_kfold_benchmark(data_dir,
                                      k=5,
                                      img_size=None,
                                      num_channels=None,
+                                     data_dir2=None,
+                                     images_extension=".tif",
                                      seed=42
                                      ):
-    _, samples, class_names = collect_files(data_dir)
+    if data_dir2:
+        file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
+            data_dir, data_dir2, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, labels))
+    else:
+        file_paths, labels, class_names = collect_files(
+            data_dir, images_extension=images_extension
+        )
+        samples = list(zip(file_paths, labels))
 
     folds = stratified_kfold_split(samples, k=k, seed=seed)
 
