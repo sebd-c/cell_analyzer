@@ -97,10 +97,9 @@ def get_args_dict() -> dict:
 def collect_files(data_dir:str):
 
     # iterate through class folders names
-    class_names = sorted([
-        d for d in os.listdir(data_dir)
-        if os.path.isdir(os.path.join(data_dir, d))
-    ])
+    class_names = sorted([d for d in os.listdir(data_dir)
+                          if os.path.isdir(os.path.join(data_dir, d))
+                          ])
 
     # getting folder name, i.e, class names
     class_to_idx = {name: i for i, name in enumerate(class_names)}
@@ -129,11 +128,10 @@ def load_tiff_py(path):
 
 
 def load_tiff_tf(path, label):
-    img = tf.py_function(
-        func=load_tiff_py,
-        inp=[path],
-        Tout=tf.float32
-    )
+    img = tf.py_function(func=load_tiff_py,
+                         inp=[path],
+                         Tout=tf.float32
+                         )
 
     img.set_shape([None, None, None])  # flexible, fix later if needed
     return img, label
@@ -178,12 +176,11 @@ def build_dataset(args):
     return ds, class_names
 
 
-def split_samples(
-    samples,
-    train_ratio=0.7,
-    val_ratio=0.15,
-    seed=42
-):
+def split_samples(samples,
+                  train_ratio=0.7,
+                  val_ratio=0.15,
+                  seed=42
+                  ):
     assert train_ratio + val_ratio < 1.0
 
     rng = random.Random(seed)
@@ -200,12 +197,11 @@ def split_samples(
     return train, val, test
 
 
-def stratified_split(
-    samples,
-    train_ratio=0.7,
-    val_ratio=0.15,
-    seed=42
-):
+def stratified_split(samples,
+                     train_ratio:float = 0.7,
+                     val_ratio:float = 0.15,
+                     seed:int = 42
+                     ):
     """
     Deterministic stratified split into train / val / test.
     """
@@ -237,11 +233,10 @@ def stratified_split(
     return train, val, test
 
 
-def stratified_kfold_split(
-    samples,
-    k=5,
-    seed=42
-):
+def stratified_kfold_split(samples,
+                           k:int = 5,
+                           seed:int = 42
+                           ):
     """
     Returns a list of (train_samples, val_samples) for each fold.
     """
@@ -275,22 +270,20 @@ def stratified_kfold_split(
     return folds
 
 
-def make_tf_dataset(
-    samples,
-    batch_size,
-    img_size=None,
-    num_channels=None,
-    shuffle=False
-):
+def make_tf_dataset(samples,
+                    batch_size,
+                    img_size=None,
+                    num_channels=None,
+                    shuffle=False
+                    ):
     paths, labels = zip(*samples)
 
     ds = tf.data.Dataset.from_tensor_slices((list(paths), list(labels)))
 
     ds = ds.map(load_tiff_tf, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.map(
-        lambda x, y: preprocess(x, y, img_size, num_channels),
-        num_parallel_calls=tf.data.AUTOTUNE
-    )
+    ds = ds.map(lambda x, y: preprocess(x, y, img_size, num_channels),
+                num_parallel_calls=tf.data.AUTOTUNE
+                )
 
     if shuffle:
         ds = ds.shuffle(len(samples))
@@ -301,173 +294,116 @@ def make_tf_dataset(
     return ds
 
 
-def build_benchmark_datasets(
-    data_dir,
-    batch_size,
-    img_size=None,
-    num_channels=None,
-    train_ratio=0.7,
-    val_ratio=0.15,
-    seed=42
-):
-    samples, class_names = collect_files(data_dir)
+def build_benchmark_datasets(data_dir: str,
+                             batch_size: int,
+                             img_size=None,
+                             num_channels=None,
+                             train_ratio=0.7,
+                             val_ratio=0.15,
+                             seed=42
+                             ):
+    _, samples, class_names = collect_files(data_dir)
 
-    train_s, val_s, test_s = split_samples(
-        samples,
-        train_ratio=train_ratio,
-        val_ratio=val_ratio,
-        seed=seed
-    )
+    train_s, val_s, test_s = split_samples(samples,
+                                           train_ratio=train_ratio,
+                                           val_ratio=val_ratio,
+                                           seed=seed
+                                           )
 
-    train_ds = make_tf_dataset(
-        train_s,
-        batch_size,
-        img_size,
-        num_channels,
-        shuffle=True
-    )
+    train_ds = make_tf_dataset(train_s,
+                               batch_size=batch_size,
+                               img_size=img_size,
+                               num_channels=num_channels,
+                               shuffle=True
+                               )
 
-    val_ds = make_tf_dataset(
-        val_s,
-        batch_size,
-        img_size,
-        num_channels,
-        shuffle=False
-    )
+    val_ds = make_tf_dataset(val_s,
+                             batch_size=batch_size,
+                             img_size=img_size,
+                             num_channels=num_channels,
+                             shuffle=True
+                             )
 
-    test_ds = make_tf_dataset(
-        test_s,
-        batch_size,
-        img_size,
-        num_channels,
-        shuffle=False
-    )
+    test_ds = make_tf_dataset(test_s,
+                              batch_size=batch_size,
+                              img_size=img_size,
+                              num_channels=num_channels,
+                              shuffle=True
+                              )
 
-    return {
-        "train": train_ds,
-        "val": val_ds,
-        "test": test_ds,
-        "class_names": class_names,
-        "num_classes": len(class_names)
-    }
+    return {"train": train_ds,
+            "val": val_ds,
+            "test": test_ds,
+            "class_names": class_names,
+            "num_classes": len(class_names)
+            }
 
 
-def build_stratified_benchmark(
-    data_dir,
-    batch_size,
-    img_size=None,
-    num_channels=None,
-    train_ratio=0.7,
-    val_ratio=0.15,
-    seed=42
-):
-    samples, class_names = collect_files(data_dir)
+def build_stratified_benchmark(data_dir,
+                               batch_size,
+                               img_size=None,
+                               num_channels=None,
+                               train_ratio=0.7,
+                               val_ratio=0.15,
+                               seed=42
+                               ):
+    _, samples, class_names = collect_files(data_dir)
 
-    train_s, val_s, test_s = stratified_split(
-        samples,
-        train_ratio=train_ratio,
-        val_ratio=val_ratio,
-        seed=seed
-    )
+    train_s, val_s, test_s = stratified_split(samples,
+                                              train_ratio=train_ratio,
+                                              val_ratio=val_ratio,
+                                              seed=seed
+                                              )
 
-    return {
-        "train": make_tf_dataset(train_s, batch_size, img_size, num_channels, shuffle=True),
-        "val": make_tf_dataset(val_s, batch_size, img_size, num_channels),
-        "test": make_tf_dataset(test_s, batch_size, img_size, num_channels),
-        "class_names": class_names,
-        "num_classes": len(class_names)
-    }
+    return {"train": make_tf_dataset(train_s,
+                                     batch_size,
+                                     img_size,
+                                     num_channels,
+                                     shuffle=True),
+            "val": make_tf_dataset(val_s,
+                                   batch_size,
+                                   img_size,
+                                   num_channels),
+            "test": make_tf_dataset(test_s,
+                                    batch_size,
+                                    img_size,
+                                    num_channels),
+            "class_names": class_names,
+            "num_classes": len(class_names)
+            }
 
 
-def build_stratified_kfold_benchmark(
-    data_dir,
-    batch_size,
-    k=5,
-    img_size=None,
-    num_channels=None,
-    seed=42
-):
-    samples, class_names = collect_files(data_dir)
+def build_stratified_kfold_benchmark(data_dir,
+                                     batch_size,
+                                     k=5,
+                                     img_size=None,
+                                     num_channels=None,
+                                     seed=42
+                                     ):
+    _, samples, class_names = collect_files(data_dir)
 
     folds = stratified_kfold_split(samples, k=k, seed=seed)
 
     tf_folds = []
     for fold_idx, (train_s, val_s) in enumerate(folds):
-        tf_folds.append({
-            "fold": fold_idx,
-            "train": make_tf_dataset(train_s, batch_size, img_size, num_channels, shuffle=True),
-            "val": make_tf_dataset(val_s, batch_size, img_size, num_channels),
-        })
+        tf_folds.append({"fold": fold_idx,
+                         "train": make_tf_dataset(train_s,
+                                                  batch_size=batch_size,
+                                                  img_size=img_size,
+                                                  num_channels=num_channels,
+                                                  shuffle=True
+                                                  ),
+                         "val": make_tf_dataset(val_s,
+                                                batch_size=batch_size,
+                                                img_size=img_size,
+                                                num_channels=num_channels,
+                                                shuffle=True
+                                                ),
+                         })
 
-    return {
-        "folds": tf_folds,
-        "class_names": class_names,
-        "num_classes": len(class_names)
-    }
-
-######################################################################
-# defining main function
-
-
-def main():
-    """Runs main code."""
-    # getting args dict
-    args_dict = get_args_dict()
-
-    # getting cytoplasm input folder
-    cyto_folder = args_dict['cyto_folder']
-
-    # getting nuclei input folder
-    nuclei_folder = args_dict['nuclei_folder']
-
-    # getting phase input folder
-    phase_folder = args_dict['phase_folder']
-
-    # path to segmentation dataframe
-    df_path = args_dict['df_path']
-
-    # path to output folder
-    output_folder = args_dict['output_folder']
-
-    # getting images extension
-    images_extension = args_dict['images_extension']
-
-    # getting cytoplasm output folder
-    cyto_output_folder = args_dict['cyto_output_folder']
-
-    # getting nuclei output folder
-    nuclei_output_folder = args_dict['nuclei_output_folder']
-
-    # getting phase output folder
-    phase_output_folder = args_dict['phase_output_folder']
-
-    # printing execution parameters
-    print_execution_parameters(params_dict=args_dict)
-
-    # waiting for user input
-    enter_to_continue()
-
-    # waiting for user input
-
-    # running function to get the segmentation df for a folder
-    args = parse_args()
-
-    dataset, class_names = build_dataset(args)
-
-    print("Classes:", class_names)
-
-    # sanity check
-    for imgs, labels in dataset.take(1):
-        print("Batch shape:", imgs.shape)
-        print("Labels:", labels.numpy())
-
+    return {"folds": tf_folds,
+            "class_names": class_names,
+            "num_classes": len(class_names)
+            }
 
 ######################################################################
-# running main function
-
-
-if __name__ == '__main__':
-    main()
-
-######################################################################
-# end of current module
