@@ -154,8 +154,47 @@ def collect_paired_files(data_dir_a: str,
     return file_paths_a, file_paths_b, labels, class_names
 
 
+def check_paired_consistency(data_dir_a: str,
+                             data_dir_b: str,
+                             images_extension: str = ".tif"):
+    class_names_a = {d for d in os.listdir(data_dir_a)
+                     if os.path.isdir(os.path.join(data_dir_a, d))}
+    class_names_b = {d for d in os.listdir(data_dir_b)
+                     if os.path.isdir(os.path.join(data_dir_b, d))}
+
+    only_in_a = sorted(class_names_a - class_names_b)
+    only_in_b = sorted(class_names_b - class_names_a)
+    common = sorted(class_names_a & class_names_b)
+
+    missing_in_b = {}
+    missing_in_a = {}
+    for class_name in common:
+        class_dir_a = os.path.join(data_dir_a, class_name)
+        class_dir_b = os.path.join(data_dir_b, class_name)
+
+        files_a = {f.lower() for f in os.listdir(class_dir_a)
+                   if f.lower().endswith(images_extension.lower())}
+        files_b = {f.lower() for f in os.listdir(class_dir_b)
+                   if f.lower().endswith(images_extension.lower())}
+
+        missing_b = sorted(files_a - files_b)
+        missing_a = sorted(files_b - files_a)
+        if missing_b:
+            missing_in_b[class_name] = missing_b
+        if missing_a:
+            missing_in_a[class_name] = missing_a
+
+    return {
+        "only_in_a": only_in_a,
+        "only_in_b": only_in_b,
+        "missing_in_b": missing_in_b,
+        "missing_in_a": missing_in_a,
+    }
+
+
 def load_tiff_py(path):
-    img = tifffile.imread(path.decode("utf-8"))
+    path_str = path.numpy().decode("utf-8")
+    img = tifffile.imread(path_str)
     img = img.astype(np.float32)
 
     img = (img - img.min()) / (img.max() - img.min() + 1e-6)
@@ -164,8 +203,10 @@ def load_tiff_py(path):
 
 
 def load_tiff_pair_py(path_a, path_b):
-    img_a = tifffile.imread(path_a.decode("utf-8")).astype(np.float32)
-    img_b = tifffile.imread(path_b.decode("utf-8")).astype(np.float32)
+    path_a_str = path_a.numpy().decode("utf-8")
+    path_b_str = path_b.numpy().decode("utf-8")
+    img_a = tifffile.imread(path_a_str).astype(np.float32)
+    img_b = tifffile.imread(path_b_str).astype(np.float32)
 
     img_a = (img_a - img_a.min()) / (img_a.max() - img_a.min() + 1e-6)
     img_b = (img_b - img_b.min()) / (img_b.max() - img_b.min() + 1e-6)
@@ -202,19 +243,35 @@ def preprocess(img, label, img_size, num_channels):
     # Ensure channel dim
     if tf.rank(img) == 2:
         img = tf.expand_dims(img, -1)
+    img = tf.ensure_shape(img, [None, None, None])
 
     # Enforce channel count if needed
     if num_channels is not None:
-        if num_channels > 1:
-            channels = tf.shape(img)[-1]
-            img = tf.cond(tf.equal(channels, 1),
-                          lambda: tf.repeat(img, num_channels, axis=-1),
-                          lambda: img,
-                          )
+        channels = tf.shape(img)[-1]
+        if num_channels == 3:
+            img = tf.cond(
+                tf.equal(channels, 1),
+                lambda: tf.repeat(img, 3, axis=2),
+                lambda: tf.cond(
+                    tf.equal(channels, 2),
+                    lambda: tf.concat([img, img[..., :1]], axis=2),
+                    lambda: img,
+                ),
+            )
+        elif num_channels > 1:
+            img = tf.cond(
+                tf.equal(channels, 1),
+                lambda: tf.repeat(img, num_channels, axis=2),
+                lambda: img,
+            )
         img = img[..., :num_channels]
 
     if img_size is not None:
-        img = tf.image.resize(img, (img_size, img_size))
+        if isinstance(img_size, (tuple, list)):
+            size = tuple(img_size)
+        else:
+            size = (img_size, img_size)
+        img = tf.image.resize(img, size)
 
     return img, label
 
@@ -482,6 +539,9 @@ def build_stratified_benchmark(data_dir,
                                     batch_size,
                                     img_size,
                                     num_channels),
+            "train_samples": train_s,
+            "val_samples": val_s,
+            "test_samples": test_s,
             "class_names": class_names,
             "num_classes": len(class_names)
             }
@@ -524,6 +584,8 @@ def build_stratified_kfold_benchmark(data_dir,
                                                 num_channels=num_channels,
                                                 shuffle=True
                                                 ),
+                         "train_samples": train_s,
+                         "val_samples": val_s,
                          })
 
     return {"folds": tf_folds,

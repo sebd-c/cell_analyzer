@@ -51,10 +51,24 @@ def organize_crop(crop_path: str,
 
     # refactor df
     df['label'] = df['label'].replace(label_dict)
+    #TODO: fixing (likely on generate crops instead)
 
     # locate crop in df
-    crop_row = df.loc[df['crop_name'] == crop_name]
+    # crop_row = df.loc[df['crop_name'] == crop_name]
 
+    # create crop name split for identification in df
+    crop_name_split = split(r"[_.]", crop_name)
+
+    # recreate image name
+    img_name = crop_name_split[1] + '.' + crop_name_split[4]
+
+    # do the same for crop id for matching type
+    crop_id = int(crop_name_split[3])
+
+    # identify crop in df to get label
+    crop_row = df[(df['cyto_id'] == crop_id) & (df['image_name'] == img_name)]
+
+    ##### end of fixing
     # need to change the row of df format to series, thus:
     current_row = crop_row.iloc[0]
 
