@@ -4,11 +4,12 @@ from os.path import join
 
 import matplotlib
 import pandas
+import numpy as np
 
-From random import uniform
-From pandas import DataFrame
-From matplotlib import pyplot as plt
-From seaborn import histplot
+from random import uniform
+from pandas import DataFrame
+from matplotlib import pyplot as plt
+from seaborn import histplot
 from argparse import ArgumentParser
 from src.utils.aux_funcs import enter_to_continue
 from src.utils.aux_funcs import get_files_in_folder
@@ -18,6 +19,56 @@ from src.utils.aux_funcs import print_execution_parameters
 
 ################################################################################################
 # module of aux functions related to img preprocessing
+def find_closest_points_between_contours(contour_a, contour_b):
+    """
+    Find the closest pair of points between two different OpenCV contours.
+
+    Accepted contour formats:
+    - (N, 1, 2) -> standard OpenCV contour
+    - (N, 2)
+
+    Returns:
+        point_a (tuple[float, float]),
+        point_b (tuple[float, float]),
+        min_distance (float)
+    """
+    a = np.asarray(contour_a, dtype=np.float64).reshape(-1, 2)
+    b = np.asarray(contour_b, dtype=np.float64).reshape(-1, 2)
+
+    if a.size == 0 or b.size == 0:
+        raise ValueError("Both contours must have at least one point.")
+
+    # Pairwise squared distances between all points from contour A and contour B.
+    diff = a[:, None, :] - b[None, :, :]
+    dist_sq = np.einsum("ijk,ijk->ij", diff, diff)
+
+    idx_a, idx_b = np.unravel_index(np.argmin(dist_sq), dist_sq.shape)
+    point_a = (float(a[idx_a, 0]), float(a[idx_a, 1]))
+    point_b = (float(b[idx_b, 0]), float(b[idx_b, 1]))
+    min_distance = float(np.sqrt(dist_sq[idx_a, idx_b]))
+
+    return point_a, point_b, min_distance
+
+
+def get_dists_image(df: DataFrame):
+    """
+    given a dataframe containing all
+    """
+    zeros_matrix = np.zeros((4, 4))
+
+    for index, row in df.iterrows():
+        curr_contour = row['cyto_contour']
+    for i in range(len(df)):
+        row_i = df.iloc[i]
+
+        rows_below = df.iloc[i + 1:]
+        rows_below = rows_below[rows_below['image_name'] == row_i['image_name']]  # condition
+
+        for j, row_j in rows_below.iterrows():
+            # process row_i with row_j
+            pass
+    pass
+
 
 def calculate_dists(df: DataFrame) -> None:
     """
@@ -37,7 +88,7 @@ def calculate_dists(df: DataFrame) -> None:
     DF = DataFrame(DI)
     DF = DF.melt()
 
-    histplot(data=df, x='variable',y = 'value')
+    histplot(data=DF, x='variable', y='value')
 
     return
 
@@ -62,7 +113,7 @@ def make_histplot_poslabel(og_img_path: str,
     DF = DataFrame(DI)
     DF = DF.melt()
 
-    histplot(data=df, x='variable',y = 'value')
+    histplot(data=DF, x='variable', y='value')
 
     return
 

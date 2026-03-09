@@ -117,14 +117,14 @@ def get_args_dict() -> dict:
     parser.add_argument('-c', '--clip-limit',
                         dest='clip_limit',
                         required=False,
-                        default=3,
+                        default=2,
                         help='defines clip limit size for open CVs CLAHE')
 
     # images extension param
     parser.add_argument('-t', '--tile-size',
                         dest='tile_size',
                         required=False,
-                        default=2,
+                        default=8,
                         help='defines tile size to grid size in open CVs CLAHE')
 
     # output folder param
