@@ -6,8 +6,10 @@ import matplotlib
 import pandas
 import numpy as np
 
+from collections import defaultdict
 from random import uniform
 from pandas import DataFrame
+from pandas import read_pickle
 from matplotlib import pyplot as plt
 from seaborn import histplot
 from argparse import ArgumentParser
@@ -19,7 +21,7 @@ from src.utils.aux_funcs import print_execution_parameters
 
 ################################################################################################
 # module of aux functions related to img preprocessing
-def find_closest_points_between_contours(contour_a, contour_b):
+def get_closest_points_between_contours(contour_a, contour_b):
     """
     Find the closest pair of points between two different OpenCV contours.
 
@@ -50,111 +52,89 @@ def find_closest_points_between_contours(contour_a, contour_b):
     return point_a, point_b, min_distance
 
 
-def get_dists_image(df: DataFrame):
+def get_pair_dists(input_path: str) -> dict:
     """
     given a dataframe containing all
     """
-    zeros_matrix = np.zeros((4, 4))
+    # read df
+    df = read_pickle(input_path)
 
-    for index, row in df.iterrows():
-        curr_contour = row['cyto_contour']
+    # dict to hold distances by normalized class pair, e.g. (0, 2) == (2, 0)
+    pair_dists = defaultdict(list)
+
+    # iterate for the 1st object
     for i in range(len(df)):
+
         row_i = df.iloc[i]
 
+        # get og obj label
+        label_i = int(row_i['label'])
+
+        # get all "unseen" rows
         rows_below = df.iloc[i + 1:]
-        rows_below = rows_below[rows_below['image_name'] == row_i['image_name']]  # condition
 
+        # separate by image
+        rows_below = rows_below[rows_below['image_name'] == row_i['image_name']]
+
+        print(f'contour {i} of {len(df)}')
+        # and iterate for the second object
         for j, row_j in rows_below.iterrows():
-            # process row_i with row_j
-            pass
-    pass
+            # get contours
+            contour_i = row_i['cyto_contour']
+            contour_j = row_j['cyto_contour']
+
+            # get the other object's label
+            label_j = int(row_j['label'])
+
+            # make and sort the combination
+            label_comb = tuple(sorted((label_i, label_j)))
+            
+            # calculate dist
+            _, _, min_distance = get_closest_points_between_contours(contour_a=contour_i,
+                                                                     contour_b=contour_j)
+            pair_dists[label_comb].append(min_distance)
+
+    print(pair_dists.keys())
+    return pair_dists
 
 
-def calculate_dists(df: DataFrame) -> None:
-    """
-    This function takes the path to a poor quality image,
-    and saves a new image enhanced by CLAHE
-    """
-
-
-    N = 100
-    R = range(N)
-
-    AB = [uniform(0, 10) for _ in R]
-    AC = [uniform(8, 16) for _ in R]
-    BC = [uniform(12, 20) for _ in R]
-
-    DI = {'AB': AB, 'AC': AC, 'BC': BC}
-    DF = DataFrame(DI)
-    DF = DF.melt()
-
-    histplot(data=DF, x='variable', y='value')
-
-    return
-
-
-def make_histplot_poslabel(og_img_path: str,
-                           output_path: str,
-                          ) -> None:
-    """
-    This function takes the path to a poor quality image,
-    and saves a new image enhanced by CLAHE
+def plot_dists(pair_dists: dict) -> None:
     """
 
-
-    N = 100
-    R = range(N)
-
-    AB = [uniform(0, 10) for _ in R]
-    AC = [uniform(8, 16) for _ in R]
-    BC = [uniform(12, 20) for _ in R]
-
-    DI = {'AB': AB, 'AC': AC, 'BC': BC}
-    DF = DataFrame(DI)
-    DF = DF.melt()
-
-    histplot(data=DF, x='variable', y='value')
-
-    return
-
-
-def enhance_dir_imgs(input_folder: str,
-                     output_folder: str,
-                     img_extension: str
-                     ) -> None:
     """
-    This function takes an input folder containing all the
-    imgs to be processed, and loops through each image processing it
-    """
-    # getting img files in respective input folder
-    img_files = get_files_in_folder(path_to_folder=input_folder,
-                                    extension=img_extension)
+    def _norm_label(x):
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return str(x)
 
-    # iterate the processing through every img
-    for file_index, img_file in enumerate(img_files, 1):
-        # printing progress message
-        base_string = 'generating processed img #INDEX# of #TOTAL#'
-        print_progress_message(base_string=base_string,
-                               index=file_index,
-                               total=len(img_files))
+    if not pair_dists:
+        raise ValueError("pair_dists is empty.")
 
-        # getting current image mask input/output paths
-        img_input_path = join(input_folder,
-                              img_file)
+    items = [(pair, dists) for pair, dists in pair_dists.items() if dists]
+    if not items:
+        raise ValueError("pair_dists contains no distances to plot.")
 
-        # create the path to save the output path
-        output_path = join(output_folder,
-                           img_file)
+    n = len(items)
+    ncols = 3
+    nrows = (n + ncols - 1) // ncols
 
-        # runnning img processing func
-        enhance_single_img(og_img_path=img_input_path,
-                           output_path=output_path)
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(4 * ncols, 3 * nrows))
+    axes = np.atleast_1d(axes).ravel()
 
-    # printing execution message
-    print(f'output saved to {output_folder}')
-    print('processing complete!')
+    for ax, (pair, dists) in zip(axes, items):
+        pair_label = f"{_norm_label(pair[0])}_{_norm_label(pair[1])}"
+        ax.hist(dists, bins=10, alpha=0.75)
+        ax.set_title(pair_label)
+        ax.set_xlabel("Distance")
+        ax.set_ylabel("Frequency")
 
-    return
+    # hide any unused subplots
+    for ax in axes[len(items):]:
+        ax.axis("off")
+
+    fig.tight_layout()
+    plt.show()
 
 
 #####################################################################
@@ -166,7 +146,7 @@ def get_args_dict() -> dict:
     Parses the arguments and returns a dictionary of the arguments.
     """
     # defining program description
-    description = 'preprocess images in grayscale'
+    description = 'returns a histplot of the distribution of classes by distance'
 
     # creating a parser instance
     parser = ArgumentParser(description=description)
@@ -174,23 +154,10 @@ def get_args_dict() -> dict:
     # adding arguments to parser
 
     # input folder param
-    parser.add_argument('-i', '--input_folder',
-                        dest='input_folder',
+    parser.add_argument('-i', '--input_df_path',
+                        dest='input_df_path',
                         required=True,
-                        help='defines path to folder containing grayscale images')
-
-    # images extension param
-    parser.add_argument('-x', '--images_extension',
-                        dest='images_extension',
-                        required=False,
-                        default='.tif',
-                        help='defines extension (.tif, .png, .jpg) of images in input folders')
-
-    # output folder param
-    parser.add_argument('-o', '--output_folder',
-                        dest='output_folder',
-                        required=True,
-                        help='defines path to output folder to save processed imgs')
+                        help='dataframe that contains all cell infos')
 
     # creating arguments dictionary
     args_dict = vars(parser.parse_args())
@@ -209,13 +176,7 @@ def main():
     args_dict = get_args_dict()
 
     # getting images folder
-    input_folder = args_dict['input_folder']
-
-    # getting images extension
-    images_extension = args_dict['images_extension']
-
-    # getting csv output path
-    output_folder = args_dict['output_folder']
+    input_df_path = args_dict['input_df_path']
 
     # printing execution parameters
     print_execution_parameters(params_dict=args_dict)
@@ -223,10 +184,10 @@ def main():
     # waiting for user input
     enter_to_continue()
 
-    # running function to preprocess images in a folder
-    enhance_dir_imgs(input_folder=input_folder,
-                     output_folder=output_folder,
-                     img_extension=images_extension)
+    # running
+    pair_dists_dict = get_pair_dists(input_path=input_df_path)
+
+    plot_dists(pair_dists_dict)
 
 
 ######################################################################
