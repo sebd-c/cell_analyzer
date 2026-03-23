@@ -194,9 +194,12 @@ def process_contour_phase(single_contour_img: np.ndarray,
                                           pixel_int=pixint,
                                           mask_name=mask_name,
                                           area=area)
+        # list to update dicts per channel
         list_intensity_dict = {}
         list_lbp_dict = {}
         list_glcm_dict = {}
+
+        # loop to get different dict channels
         for channel_key in channels_dict.keys():
             # calculate pixel intensity features to extract
             intensity_dict = get_intensity_features(area=area,
@@ -204,19 +207,30 @@ def process_contour_phase(single_contour_img: np.ndarray,
                                                     mask_image=single_contour_img,
                                                     prefix=str(channel_key)
                                                     )
-            list_intensity_dict.update(intensity_dict)
 
-            # get textural parameters of contour in different phase channel
-            single_lbp_df = run_lbp_metrics(image=phase_red,
-                                            contour=contour[0]
+            # get lbp textural parameters
+            lbp_dict = run_lbp_metrics(image=phase_red,
+                                            contour=contour[0],
+                                            prefix=str(channel_key)
                                             )
 
-            single_glcm_df = get_glcm_features(image=phase_red,
-                                               mask=single_contour_img,
-                                               levels=32,
-                                               distances=[3, 6, 9, 18],
-                                               angles_deg=[0, 45, 90, 135])
-        morpho_dict.update(intensity_dict)
+            # get glcm textural parameters
+            glcm_dict = get_glcm_features(image=phase_red,
+                                          mask=single_contour_img,
+                                          levels=32,
+                                          distances=[3, 6, 9, 18],
+                                          angles_deg=[0, 45, 90, 135],
+                                          prefix=str(channel_key))
+
+            # update dicts
+            list_intensity_dict.update(intensity_dict)
+            list_lbp_dict.update(lbp_dict)
+            list_glcm_dict.update(glcm_dict)
+
+        # update morpho dict with intensity and texture dicts
+        morpho_dict.update(list_intensity_dict)
+        morpho_dict.update(list_lbp_dict)
+        morpho_dict.update(list_glcm_dict)
 
     # loop in single contour to extract parameters
     single_contour_df = get_df_features(single_contour_image=single_contour_img,

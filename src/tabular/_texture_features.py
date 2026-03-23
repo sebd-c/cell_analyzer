@@ -378,20 +378,3 @@ def get_glcm_features(image: np.ndarray,
     return features
 
 
-def get_fluorescent_metrics(pixint_list: list) -> dict:
-
-    # fluo_dict = {'grayscale_mean': arr_mean(pixint_list),
-    #              'grayscale_median':arr_median(pixint_list),
-    #              'grayscale_max':arr_max(),
-    #              'grayscale_min':,
-    #              'grayscale_sum':,
-    #              'grayscale_int_density':
-    #             }
-    # fluo_dict['grayscale_mean'] = mean(pixint_list)
-    # fluo_dict['grayscale_median'] = median(pixint_list)
-    # fluo_dict['grayscale_max'] = max(pixint_list)
-    # contour_dict['grayscale_min'] = min(pixint_list)
-    # contour_dict['grayscale_sum'] = sum(pixint_list)
-    # contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
-
-    pass
