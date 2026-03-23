@@ -27,11 +27,11 @@ from numpy import ndarray
 from numpy import uint8 as np_uint8
 from numpy import zeros as np_zeros
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
+from src._execution_formatting import enter_to_continue
 from src.utils.aux_funcs import print_progress_message
 from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
-from src.utils.aux_funcs import apply_mask
+from src.image_processing._img_subprocess import apply_mask
 from src.utils.aux_funcs import make_crop
 from src.utils.aux_funcs import make_crop_rotate
 from src.utils.aux_funcs import save_img

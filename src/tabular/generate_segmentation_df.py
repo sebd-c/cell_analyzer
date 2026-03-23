@@ -1,5 +1,6 @@
 # generate segmentation dfs module
 import numpy as np
+from sqlalchemy.util import to_list
 
 print('initializing...')  # noqa
 
@@ -11,23 +12,30 @@ print('initializing...')  # noqa
 
 # importing required libraries
 print('importing required libraries...')  # noqa
-from argparse import ArgumentParser
-from cv2 import imread
-from cv2 import contourArea
-from cv2 import findContours
-from cv2 import split
-from cv2 import imwrite
-from cv2 import COLOR_BGR2RGB
-from cv2 import cvtColor
-from cv2 import CHAIN_APPROX_NONE
-from cv2 import RETR_EXTERNAL
-from cv2 import RETR_LIST
-from cv2 import RETR_FLOODFILL
-from cv2 import MORPH_OPEN
-from cv2 import MORPH_CLOSE
-from cv2 import morphologyEx
-from cv2 import dilate
-from skimage.measure import label
+import argparse as ap
+import cv2 as cv
+import pandas as pd
+import numpy as np
+from skimage import measure as skimeas
+from skimage import morphology as skimorph
+from src.tabular._texture_features import get_intensity_features
+from src.tabular._geometric_features import get_morpho_features
+# from cv2 import imread
+# from cv2 import contourArea
+# from cv2 import findContours
+# from cv2 import split
+# from cv2 import imwrite
+# from cv2 import COLOR_BGR2RGB
+# from cv2 import cvtColor
+# from cv2 import CHAIN_APPROX_NONE
+# from cv2 import RETR_EXTERNAL
+# from cv2 import RETR_LIST
+# from cv2 import RETR_FLOODFILL
+# from cv2 import MORPH_OPEN
+# from cv2 import MORPH_CLOSE
+# from cv2 import morphologyEx
+# from cv2 import dilate
+# from skimage.measure import label
 from skimage.morphology import diameter_opening
 from skimage.morphology import diameter_closing
 from skimage.morphology import remove_small_holes
@@ -35,19 +43,19 @@ from skimage.morphology import remove_small_objects
 from skimage.measure import find_contours
 from numpy import uint8 as np_uint8
 from numpy import uint32 as np_uint32
-from numpy import ndarray
-from pandas import concat
-from pandas import DataFrame
-from os.path import join
-from numpy import max
-from numpy import min
-from numpy import mean
-from numpy import median
-from numpy import sum
-from numpy import unique
+# from numpy import ndarray
+# from pandas import concat
+# from pandas import DataFrame
+# from os.path import join
+# from numpy import max
+# from numpy import min
+# from numpy import mean
+# from numpy import median
+# from numpy import sum
+# from numpy import unique
 from numpy import isin
 import tifffile
-from src.utils.aux_funcs import enter_to_continue
+from src.utils.aux_funcs import enter_to_continue, mask_image
 from src.utils.aux_funcs import get_contour_centroid
 from src.utils.aux_funcs import get_area_box
 from src.utils.aux_funcs import get_contour_rratio
@@ -66,15 +74,15 @@ print('all required libraries successfully imported.')  # noqa
 
 
 #####################################################################
-def get_parameters_df(contour: ndarray,
-                      pixel_int: float,
-                      mask_name: str,
-                      flag: int,
-                      pixint_list: list,
-                      phase_red_list: list or None = None,
-                      phase_green_list: list or None = None,
-                      phase_blue_list: list or None = None
-                      ) -> DataFrame:
+def get_df_features(single_contour_image: np.ndarray,
+                    contour: np.ndarray,
+                    pixel_int: float,
+                    mask_name: str,
+                    pixint_list: list,
+                    phase_red_list: list or None = None,
+                    phase_green_list: list or None = None,
+                    phase_blue_list: list or None = None
+                    ) -> pd.DataFrame:
     """
     Given a single contour,
     calculates and adresses desired values to columns
@@ -91,91 +99,36 @@ def get_parameters_df(contour: ndarray,
     """
 
     # getting current contour area
-    area = contourArea(contour)
+    area = cv.contourArea(contour)
     print(area)
 
-    # if pixel_int ==12:
-    #     print(area)
-    #     flag = np.isin(single_contour_img, 1)
-    #     print(unique(flag))
-    #     exit()
     # TODO: check why this is happening and if unavoidable, put in argparser
     if area > 10:
 
-        # getting current contour centroid coords
-        centroid_x, centroid_y = get_contour_centroid(contour)
+        # calculate morphometric features to extract
+        morpho_dict = get_morpho_features(contour=contour,
+                                          pixel_int=pixel_int,
+                                          mask_name=mask_name,
+                                          area=area)
 
-        # getting current contours area box
-        area_box = get_area_box(contour, area)
+        # calculate pixel intensity features to extract
+        intensity_dict = get_intensity_features(area=area,
+                                                pixint_list=pixint_list,
+                                                phase_red_list=phase_red_list,
+                                                phase_green_list=phase_green_list,
+                                                phase_blue_list=phase_blue_list
+                                                )
+        # get textural parameters of contour in different phase channel
+        single_lbp_df = run_lbp_metrics(image=phase_red,
+                                        contour=contour[0]
+                                        )
 
-        # getting current contour radius ratio
-        radius_ratio = get_contour_rratio(contour, (centroid_x, centroid_y))
-
-        # getting current contours' aspect and eccentricity, respectively
-        aspect, eccentricity = get_contour_ellipse_feats(contour)
-
-        # getting current contours' roundness
-        roundness = get_contour_roundness(contour, area)
-
-        # calculates cii as per Filippi-Chiela et al, 2012
-        ii = (0.9 * aspect) - (0.87 * area_box) + (0.96 * radius_ratio) + (0.92 * roundness)
-
-        # now moving to organizing them into a dictionary
-        contour_dict = {'image_name': mask_name,
-                        'contour_index': int(pixel_int),
-                        'cx_coords': centroid_x,
-                        'cy_coords': centroid_y,
-                        'area': area,
-                        'area_box': area_box,
-                        'radius_ratio': radius_ratio,
-                        'aspect': aspect,
-                        'eccentricity': eccentricity,
-                        'roundness': roundness,
-                        'ii': ii,
-                        'contour': [contour],
-                        }
-
-        # lastly, we define what pixel intensities are going to be added
-        # if the function was called by the processing of a phase img
-        if flag == 1:
-            # getting pixel intensity values for RGB and adding them to the dict
-            contour_dict['grayscale_mean'] = mean(pixint_list)
-            contour_dict['grayscale_median'] = median(pixint_list)
-            contour_dict['grayscale_max'] = max(pixint_list)
-            contour_dict['grayscale_min'] = min(pixint_list)
-            contour_dict['grayscale_sum'] = sum(pixint_list)
-            contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
-
-            contour_dict['red_mean'] = mean(phase_red_list)
-            contour_dict['red_median'] = median(phase_red_list)
-            contour_dict['red_max'] = max(phase_red_list)
-            contour_dict['red_min'] = min(phase_red_list)
-            contour_dict['red_sum'] = sum(phase_red_list)
-            contour_dict['red_int_density'] = contour_dict['red_sum'] / area
-
-            contour_dict['green_mean'] = mean(phase_green_list)
-            contour_dict['green_median'] = median(phase_green_list)
-            contour_dict['green_max'] = max(phase_green_list)
-            contour_dict['green_min'] = min(phase_green_list)
-            contour_dict['green_sum'] = sum(phase_green_list)
-            contour_dict['green_int_density'] = contour_dict['green_sum'] / area
-
-            contour_dict['blue_mean'] = mean(phase_blue_list)
-            contour_dict['blue_median'] = median(phase_blue_list)
-            contour_dict['blue_max'] = max(phase_blue_list)
-            contour_dict['blue_min'] = min(phase_blue_list)
-            contour_dict['blue_sum'] = sum(phase_blue_list)
-            contour_dict['blue_int_density'] = contour_dict['blue_sum'] / area
-
-        # if the function was called by the processing of a simple channel img
-        #  simply calculate for that grayscale
-        elif flag == 0:
-            contour_dict['grayscale_mean'] = mean(pixint_list)
-            contour_dict['grayscale_median'] = median(pixint_list)
-            contour_dict['grayscale_max'] = max(pixint_list)
-            contour_dict['grayscale_min'] = min(pixint_list)
-            contour_dict['grayscale_sum'] = sum(pixint_list)
-            contour_dict['grayscale_int_density'] = contour_dict['grayscale_sum'] / area
+        single_glcm_df = get_glcm_features(image=phase_red,
+                                           mask=single_contour_img,
+                                           levels=32,
+                                           distances=[3, 6, 9, 18],
+                                           angles_deg=[0, 45, 90, 135])
+        morpho_dict.update(intensity_dict)
 
     else:
         contour_dict = {'image_name': mask_name,
@@ -198,14 +151,14 @@ def get_parameters_df(contour: ndarray,
     return contour_df
 
 
-def process_contour_phase(single_contour_img: ndarray,
+def process_contour_phase(single_contour_img: np.ndarray,
                           mask_name: str,
                           pixint: float,
-                          image: ndarray,
-                          phase_red: ndarray,
-                          phase_green: ndarray,
-                          phase_blue: ndarray
-                          ) -> DataFrame:
+                          image: np.ndarray,
+                          phase_red: np.ndarray,
+                          phase_green: np.ndarray,
+                          phase_blue: np.ndarray
+                          ) -> pd.DataFrame:
     """
     Given an array of a single contour
     :param pixint:
@@ -218,49 +171,69 @@ def process_contour_phase(single_contour_img: ndarray,
     :return:
     """
 
-    # getting pixel intensities for each channel
-    phase_red_intensity = phase_red[single_contour_img == 1]
-    phase_green_intensity = phase_green[single_contour_img == 1]
-    phase_blue_intensity = phase_blue[single_contour_img == 1]
-    og_intensity = image[single_contour_img == 1]
-
-    # transforming it in list formatting
-    # phase_red_intensity = phase_red_intensity.flatten()
-    # phase_green_intensity = phase_green_intensity.flatten()
-    # phase_blue_intensity = phase_blue_intensity.flatten()
-    # og_intensity = og_intensity.flatten()
-
     # converting int type
-    single_contour_img = single_contour_img.astype(np_uint8)
+    single_contour_img = single_contour_img.astype(np.uint8)
 
     # finding contour in image
-    contour, _ = findContours(single_contour_img, RETR_EXTERNAL, CHAIN_APPROX_NONE)
+    contour, _ = cv.findContours(single_contour_img,
+                                 cv.RETR_EXTERNAL,
+                                 cv.CHAIN_APPROX_NONE)
+    # getting current contour area
+    area = cv.contourArea(contour)
+    print(area)
 
-    # loop in single contour to extract parameters
-    single_contour_df = get_parameters_df(contour=contour[0],
+    channels_dict = {'grayscale': image,
+                     'red': phase_red,
+                     'green': phase_green,
+                     'blue': phase_blue
+                     }
+    # TODO: check why this is happening and if unavoidable, put in argparser
+    if area > 10:
+        # calculate morphometric features to extract
+        morpho_dict = get_morpho_features(contour=contour[0],
                                           pixel_int=pixint,
                                           mask_name=mask_name,
-                                          flag=1,
-                                          pixint_list=og_intensity,
-                                          phase_red_list=phase_red_intensity,
-                                          phase_green_list=phase_green_intensity,
-                                          phase_blue_list=phase_blue_intensity
-                                          )
+                                          area=area)
+        list_intensity_dict = {}
+        list_lbp_dict = {}
+        list_glcm_dict = {}
+        for channel_key in channels_dict.keys():
+            # calculate pixel intensity features to extract
+            intensity_dict = get_intensity_features(area=area,
+                                                    image=channels_dict[channel_key],
+                                                    mask_image=single_contour_img,
+                                                    prefix=str(channel_key)
+                                                    )
+            list_intensity_dict.update(intensity_dict)
+
+            # get textural parameters of contour in different phase channel
+            single_lbp_df = run_lbp_metrics(image=phase_red,
+                                            contour=contour[0]
+                                            )
+
+            single_glcm_df = get_glcm_features(image=phase_red,
+                                               mask=single_contour_img,
+                                               levels=32,
+                                               distances=[3, 6, 9, 18],
+                                               angles_deg=[0, 45, 90, 135])
+        morpho_dict.update(intensity_dict)
+
+    # loop in single contour to extract parameters
+    single_contour_df = get_df_features(single_contour_image=single_contour_img,
+                                        contour=contour[0],
+                                        pixel_int=pixint,
+                                        mask_name=mask_name,
+                                        pixint_list=og_intensity,
+                                        phase_red_list=phase_red_intensity,
+                                        phase_green_list=phase_green_intensity,
+                                        phase_blue_list=phase_blue_intensity
+                                        )
     rows_to_delete = single_contour_df[single_contour_df['area']==-1].index
     single_contour_df.drop(rows_to_delete, inplace=True)
 
-    # get textural parameters of contour in different phase channel
-    single_lbp_df = run_lbp_metrics(image=phase_red,
-                                    contour=contour[0]
-                                    )
 
-    single_glcm_df = get_glcm_features(image=phase_red,
-                                       mask=single_contour_img,
-                                       levels=32,
-                                       distances=[3, 6, 9, 18],
-                                       angles_deg=[0, 45, 90, 135])
 
-    concat_metrics_df = concat([single_contour_df, single_lbp_df, single_glcm_df],
+    concat_metrics_df = pd.concat([single_contour_df, single_lbp_df, single_glcm_df],
                                axis=1)
 
     if not len(single_contour_df) == 0:
@@ -305,7 +278,7 @@ def make_image_contours_df(mask_name: str,
     """
 
     # read the rgb channel
-    phase_image_cv2 = imread(p_img_path,
+    phase_image_cv2 = cv.imread(p_img_path,
                              -1)
 
     # convert it to the accurate colors
@@ -322,16 +295,16 @@ def make_image_contours_df(mask_name: str,
     mask = tifffile.imread(mask_path)
 
     # relabel img as to separate loose pixels
-    mask = label(mask)
+    mask = skimeas.label(mask)
 
     # # make it uint8 for morphological operations
-    mask = mask.astype(np_uint8)
+    mask = mask.astype(np.uint8)
 
     # define kernel for morphological operations
-    kernel = np.ones((3, 3), np_uint8)
+    kernel = np.ones((3, 3), np.uint8)
 
     # remove small objects
-    mask = remove_small_objects(mask)
+    mask = skimorph.remove_small_objects(mask)
 
     # close small holes (same library was not used for need of int types instead of booleans)
     mask = morphologyEx(mask, MORPH_CLOSE, kernel)
@@ -498,7 +471,7 @@ def get_args_dict() -> dict:
     description = 'generate segmentation df module'
 
     # creating a parser instance
-    parser = ArgumentParser(description=description)
+    parser = ap.ArgumentParser(description=description)
 
     # adding arguments to parser
 
