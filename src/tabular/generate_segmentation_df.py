@@ -20,40 +20,7 @@ from skimage import measure as skimeas
 from skimage import morphology as skimorph
 from src.tabular._texture_features import get_intensity_features
 from src.tabular._geometric_features import get_morpho_features
-# from cv2 import imread
-# from cv2 import contourArea
-# from cv2 import findContours
-# from cv2 import split
-# from cv2 import imwrite
-# from cv2 import COLOR_BGR2RGB
-# from cv2 import cvtColor
-# from cv2 import CHAIN_APPROX_NONE
-# from cv2 import RETR_EXTERNAL
-# from cv2 import RETR_LIST
-# from cv2 import RETR_FLOODFILL
-# from cv2 import MORPH_OPEN
-# from cv2 import MORPH_CLOSE
-# from cv2 import morphologyEx
-# from cv2 import dilate
-# from skimage.measure import label
-from skimage.morphology import diameter_opening
-from skimage.morphology import diameter_closing
-from skimage.morphology import remove_small_holes
-from skimage.morphology import remove_small_objects
-from skimage.measure import find_contours
-from numpy import uint8 as np_uint8
-from numpy import uint32 as np_uint32
-# from numpy import ndarray
-# from pandas import concat
-# from pandas import DataFrame
-# from os.path import join
-# from numpy import max
-# from numpy import min
-# from numpy import mean
-# from numpy import median
-# from numpy import sum
-# from numpy import unique
-from numpy import isin
+from os.path import join
 import tifffile
 from src.utils.aux_funcs import enter_to_continue, mask_image
 from src.utils.aux_funcs import get_contour_centroid
@@ -66,8 +33,8 @@ from src.utils.aux_funcs import get_files_in_folder
 from src.utils.aux_funcs import print_execution_parameters
 from src.utils.aux_funcs import make_contour_label
 from src.utils.aux_funcs import get_unique_ids
-from src.utils.aux_funcs import run_lbp_metrics
-from src.utils.aux_funcs import get_glcm_features
+from src.tabular._texture_features import run_lbp_metrics
+from src.tabular._texture_features import get_glcm_features
 
 
 print('all required libraries successfully imported.')  # noqa
@@ -113,10 +80,9 @@ def get_df_features(single_contour_image: np.ndarray,
 
         # calculate pixel intensity features to extract
         intensity_dict = get_intensity_features(area=area,
-                                                pixint_list=pixint_list,
-                                                phase_red_list=phase_red_list,
-                                                phase_green_list=phase_green_list,
-                                                phase_blue_list=phase_blue_list
+                                                image=pixint_list,
+                                                mask_image=phase_red_list,
+                                                prefix=phase_green_list,
                                                 )
         # get textural parameters of contour in different phase channel
         single_lbp_df = run_lbp_metrics(image=phase_red,
@@ -209,18 +175,19 @@ def process_contour_phase(single_contour_img: np.ndarray,
                                                     )
 
             # get lbp textural parameters
-            lbp_dict = run_lbp_metrics(image=phase_red,
-                                            contour=contour[0],
-                                            prefix=str(channel_key)
-                                            )
+            lbp_dict = run_lbp_metrics(image=channels_dict[channel_key],
+                                       contour=contour[0],
+                                       prefix=str(channel_key)
+                                       )
 
             # get glcm textural parameters
-            glcm_dict = get_glcm_features(image=phase_red,
+            glcm_dict = get_glcm_features(image=channels_dict[channel_key],
                                           mask=single_contour_img,
                                           levels=32,
                                           distances=[3, 6, 9, 18],
                                           angles_deg=[0, 45, 90, 135],
-                                          prefix=str(channel_key))
+                                          prefix=str(channel_key)
+                                          )
 
             # update dicts
             list_intensity_dict.update(intensity_dict)
@@ -283,7 +250,7 @@ def make_image_contours_df(mask_name: str,
                            og_img_path: str,
                            p_img_path: str,
                            overlays_output_folder: str
-                           ) -> DataFrame:
+                           ) -> pd.DataFrame:
     """
     Given a path to a binary image,
     finds contours and
@@ -293,16 +260,16 @@ def make_image_contours_df(mask_name: str,
 
     # read the rgb channel
     phase_image_cv2 = cv.imread(p_img_path,
-                             -1)
+                                -1)
 
     # convert it to the accurate colors
-    phase_image = cvtColor(phase_image_cv2, COLOR_BGR2RGB)
+    phase_image = cv.cvtColor(phase_image_cv2, cv.COLOR_BGR2RGB)
 
     # separate channels
-    phase_red, phase_green, phase_blue = split(phase_image)
+    phase_red, phase_green, phase_blue = cv.split(phase_image)
 
     # reading grayscale image
-    image = imread(og_img_path,
+    image = cv.imread(og_img_path,
                    -1)
 
     # reading mask
@@ -321,19 +288,11 @@ def make_image_contours_df(mask_name: str,
     mask = skimorph.remove_small_objects(mask)
 
     # close small holes (same library was not used for need of int types instead of booleans)
-    mask = morphologyEx(mask, MORPH_CLOSE, kernel)
-
-    # flattened_contour_img = mask.flatten()
-    # unique_val, counts = unique(flattened_contour_img, return_counts=True)
-    # print(dict(zip(unique_val, counts)))
-    # exit()
-    # print(type(mask))
-    # exit()
+    mask = cv.morphologyEx(mask, cv.MORPH_CLOSE, kernel)
 
     # test output
     overlays_output_path = join(overlays_output_folder, mask_name)
-    imwrite(overlays_output_path, mask)
-    # exit()
+    cv.imwrite(overlays_output_path, mask)
 
     # getting intensity range to
     # separate contours before binarizing mask
@@ -355,7 +314,7 @@ def make_image_contours_df(mask_name: str,
         single_contour_img[mask == pixel_intensity] = 1
 
         flattened_contour_img = single_contour_img.flatten()
-        unique_val, counts = unique(flattened_contour_img, return_counts=True)
+        unique_val, counts = np.unique(flattened_contour_img, return_counts=True)
         print(dict(zip(unique_val, counts)))
 
         # choose which way the function should be continued
@@ -375,12 +334,12 @@ def make_image_contours_df(mask_name: str,
         contours_df_list.append(contour_df)
 
     # concat the list of dfs into a single df
-    concat_contours_df = concat(contours_df_list, ignore_index=True)
+    concat_contours_df = pd.concat(contours_df_list, ignore_index=True)
 
     # save image with labels
     overlays_output_path = join(overlays_output_folder, mask_name)
 
-    imwrite(overlays_output_path, image)
+    cv.imwrite(overlays_output_path, image)
 
     # returning contours df
     return concat_contours_df
@@ -452,12 +411,12 @@ def make_folder_contours_df(masks_input_folder: str,
                                           overlays_output_folder=overlays_output_folder
                                           )
 
-        # append curr img df to dir df
+        # append current img df to dir df
         dfs_list.append(image_df)
 
     # concatenating "dfs" from dfs lists into
     # a pandas dataframe
-    contour_df = concat(dfs_list, ignore_index=True)
+    contour_df = pd.concat(dfs_list, ignore_index=True)
 
     # create the path to save the output path
     output_path = join(csv_output_folder,
