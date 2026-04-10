@@ -65,20 +65,15 @@ def get_inscribed_rect_mask(contour: np.ndarray,
     return x1, x2, y1, y2
 
 def get_lbp_hist(image:np.ndarray,
-                 x1: int,
-                 x2: int,
-                 y1: int,
-                 y2: int,
+                 mask: np.ndarray,
                  points: int,
                  radius: int,
                  n_bins=None
                  ):
 
-    # create lbp 2d array
-    lbp_crop = image[y1:y2, x1:x2]
-
-    # compute LBP on internal cell crop
-    lbp = skifeat.local_binary_pattern(lbp_crop, points, radius, 'uniform')
+    # compute LBP on the available image support and only count codes inside the mask
+    lbp = skifeat.local_binary_pattern(image, points, radius, 'uniform')
+    lbp_values = lbp[mask > 0]
 
     #
     # Determine number of bins from max LBP value
@@ -86,7 +81,7 @@ def get_lbp_hist(image:np.ndarray,
         n_bins = int(lbp.max() + 1)
 
     # Histogram
-    hist, _ = np.histogram(lbp.ravel(),
+    hist, _ = np.histogram(lbp_values,
                            bins=n_bins,
                            range=(0, n_bins),
                            density=True)
@@ -164,14 +159,11 @@ def run_lbp_metrics(image:np.ndarray,
     :return:
     """
     shape = image.shape
-
-    x1, x2, y1, y2 = get_inscribed_rect_mask(contour=contour)
+    mask = np.zeros(shape, dtype=np.uint8)
+    cv.drawContours(mask, [contour], -1, color=1, thickness=-1)
 
     lbp_hist = get_lbp_hist(image=image,
-                            x1=x1,
-                            x2=x2,
-                            y1=y1,
-                            y2=y2,
+                            mask=mask,
                             points=8,
                             radius=1,
                             )
@@ -376,5 +368,4 @@ def get_glcm_features(image: np.ndarray,
             features[f"{prefix}_glcm_{prop}_d{d}"] = vals[d_i, :].mean()
 
     return features
-
 

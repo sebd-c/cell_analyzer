@@ -13,23 +13,14 @@ print('initializing...')  # noqa
 print('importing required libraries...')  # noqa
 from numpy import stack
 from os.path import join
-from numpy import ndarray
-from numpy import uint8 as np_uint8
-from numpy import zeros as np_zeroes
-from cv2 import imread
-from cv2 import GaussianBlur
-from cv2 import findContours
-from cv2 import drawContours
-from cv2 import RETR_EXTERNAL
-from cv2 import BORDER_DEFAULT
-from cv2 import CHAIN_APPROX_NONE
-from cv2 import contourArea
+import numpy as np
+import cv2 as cv
 from skimage.io import imsave as sk_imsave
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import get_files_in_folder
-from src.utils.aux_funcs import print_execution_parameters
+from src._execution_formatting import enter_to_continue
+from src._execution_formatting import print_progress_message
+from src._execution_formatting import get_files_in_folder
+from src._execution_formatting import print_execution_parameters
 print('all required libraries successfully imported.')  # noqa
 
 #####################################################################
@@ -38,13 +29,13 @@ print('all required libraries successfully imported.')  # noqa
 # defining auxiliary functions
 
 
-def mask_single_img(image: ndarray,
+def mask_single_img(image: np.ndarray,
                     lower_threshold: int,
                     upper_threshold: int,
                     min_size: int,
                     max_size: int,
                     kernel_size: int
-                    ) -> ndarray:
+                    ) -> np.ndarray:
     """
     Given a 2d array, returns masked
     image, based on given parameters.
@@ -54,9 +45,9 @@ def mask_single_img(image: ndarray,
     img_height, img_width = image_dimensions
 
     # blurring image (good for rounding objects)
-    image = GaussianBlur(image,
-                         (kernel_size, kernel_size),
-                         BORDER_DEFAULT)
+    image = cv.GaussianBlur(image,
+                            (kernel_size, kernel_size),
+                            cv.BORDER_DEFAULT)
 
     # applying upper threshold (discards pixels with higher intensity than threshold)
     image[image > upper_threshold] = 0
@@ -66,21 +57,21 @@ def mask_single_img(image: ndarray,
     image[image >= lower_threshold] = 255
 
     # converting image to 8bit
-    image = image.astype(np_uint8)
+    image = image.astype(np.uint8)
 
     # finding contours
-    contours, _ = findContours(image,
-                               RETR_EXTERNAL,
-                               CHAIN_APPROX_NONE)
+    contours, _ = cv.findContours(image,
+                                  cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_NONE)
 
     # resetting image (I'll redraw only contours within specified size parameters)
-    image = np_zeroes(image_dimensions)
+    image = np.zeros(image_dimensions)
 
     # iterating over contours
     for contour in contours:
 
         # getting current contour area
-        contour_area = contourArea(contour)
+        contour_area = cv.contourArea(contour)
 
         # getting contour area check bool
         area_check = (contour_area >= min_size) and (contour_area <= max_size)
@@ -115,8 +106,8 @@ def generate_binary_mask(input_path: str,
     mask to given output path.
     """
     # reading current image
-    image = imread(input_path,
-                   -1)
+    image = cv.imread(input_path,
+                      -1)
 
     # defining placeholder value for image mask
     image_mask = None
@@ -131,7 +122,7 @@ def generate_binary_mask(input_path: str,
                                  max_size=max_size)
 
     # converting image to 8bit
-    image_mask = image_mask.astype(np_uint8)
+    image_mask = image_mask.astype(np.uint8)
 
     # saving image
     sk_imsave(output_path,

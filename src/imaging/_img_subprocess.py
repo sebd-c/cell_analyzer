@@ -24,6 +24,28 @@ def apply_mask(image: np.ndarray,
 
     return masked_image
 
+
+def get_unique_ids(mask: np.ndarray) -> list:
+    """
+    Given an image of segmentation masks, returns
+    a list containing all object ids.
+    """
+    # getting current mask unique values
+    object_ids = np.unique(mask)
+
+    # converting ids to list
+    object_ids = object_ids.tolist()
+
+    if 0 in object_ids:
+        # removing zero from list (background pixel)
+        object_ids.remove(0)
+
+    # sorting list
+    object_ids = sorted(object_ids)
+
+    # returning object ids list
+    return object_ids
+
 #################################################################
 # crop related functions
 def make_crop(image: np.ndarray,

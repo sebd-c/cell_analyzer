@@ -12,12 +12,14 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
-from cv2 import pointPolygonTest
-from pandas import concat
-from pandas import DataFrame
-from pandas import read_pickle
+import cv2 as cv
+# from cv2 import pointPolygonTest
+import pandas as pd
+# from pandas import concat
+# from pandas import DataFrame
+# from pandas import read_pickle
 from os.path import join
-from src.utils.aux_funcs import print_execution_parameters
+from src._execution_formatting import print_execution_parameters
 from src.utils.merge_channels import merge_multiple_images
 
 print('all required libraries successfully imported.')  # noqa
@@ -60,8 +62,8 @@ def string_to_contours_array(input_string: str) -> np.ndarray:
         raise ValueError(f"Failed to parse input string into a numpy array: {e}")
 
 
-def link_cytnuc(cyt_df: DataFrame,
-                nuc_df: DataFrame,
+def link_cytnuc(cyt_df: pd.DataFrame,
+                nuc_df: pd.DataFrame,
                 output_path: str) -> None:
     """
     given a df from cytoplasm segmentation,
@@ -85,27 +87,11 @@ def link_cytnuc(cyt_df: DataFrame,
         cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_row['image_name']]
 
         for cyto_index, cyto_row in cyt_df_img.iterrows():
-            # remember to put the contour into the df
-            # when saved in a csv, the contour turns into string
+            # get current cyto
             cyto_contour = cyto_row['contour']
 
-            # str_unextracted_cyto = string_to_contours_array(input_string=str_unextracted_cyto)
-
-            # # we adapted it with a surplus of brackets
-            # # before proceeding, you need to remove that surplus of brackets
-            # # TODO: alterar tudo pra .pickle ou achar uma conversão melhor pra isso
-            # front = str_unextracted_cyto.find('[')
-            # str_unextracted_cyto = str_unextracted_cyto[:front] + str_unextracted_cyto[front + 1:]
-            # rear = str_unextracted_cyto.rfind(']')
-            # str_unextracted_cyto = str_unextracted_cyto[:rear] + str_unextracted_cyto[rear + 1:]
-            #
-            # # after having adapt the string to array, we can proceed
-            # unextracted_cyto = array(str_unextracted_cyto)
-            # extracted_cyto = UMat(unextracted_cyto)
-
-            # now use this cv2 function to
             # test if a point is inside an object
-            if pointPolygonTest(cyto_contour,
+            if cv.pointPolygonTest(cyto_contour,
                                 # if it is, it'll be a match parent cytoplasm
                                 # measureDist 0 or 1
                                 (nuc_row['cx_coords'], nuc_row['cy_coords']),
@@ -115,6 +101,8 @@ def link_cytnuc(cyt_df: DataFrame,
 
                 # having the tested pointed out it's a parent,
                 # begin making a row for the new joint df
+                #TODO: add flag d cyto/nuc no inicio pra
+                # concatenar verticalmente sem essa baixaria
                 linked_dict = {'image_name': cyto_row['image_name'],
                                'cyto_id': cyto_row['contour_index'],
                                'cyto_cx': cyto_row['cx_coords'],
@@ -198,7 +186,7 @@ def link_cytnuc(cyt_df: DataFrame,
                                }
 
                 # make the new dictionary into a temporary one row df
-                linked_df = DataFrame(linked_dict, index=[0])
+                linked_df = pd.DataFrame(linked_dict, index=[0])
 
                 # append the newly made df into a list
                 linked_dfs_list.append(linked_df)
@@ -207,9 +195,9 @@ def link_cytnuc(cyt_df: DataFrame,
                 # you need to break the loop to move into the other nuclei
                 break
 
-    # concating contour df into bigger df
+    # concatenating contour df into bigger df
     # a pandas dataframe
-    concat_linked_df = concat(linked_dfs_list, ignore_index=True)
+    concat_linked_df = pd.concat(linked_dfs_list, ignore_index=True)
 
     # saving new df
     concat_linked_df.to_pickle(output_path)
@@ -240,9 +228,9 @@ def make_cytnuc_output(cyt_csv_input_path: str,
                           img_extension=img_extension)
 
     # read the .csv tables of both making them into a DataFrame object
-    cyto_df = read_pickle(cyt_csv_input_path)
+    cyto_df = pd.read_pickle(cyt_csv_input_path)
 
-    nuc_df = read_pickle(nuc_csv_input_path)
+    nuc_df = pd.read_pickle(nuc_csv_input_path)
 
     # create the path to save the output path
     output_path = join(csv_output_folder,

@@ -1,47 +1,53 @@
 ###########################################################################################
 # imports
 from os.path import join
-from cv2 import imread
-from cv2 import imwrite
-from cv2 import createCLAHE
-from cv2 import IMREAD_GRAYSCALE
-from PIL import Image
+from skimage.measure import label as sk_label
+from skimage.io import imsave as sk_imsave
+import numpy as np
+import cv2 as cv
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import get_files_in_folder
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import print_execution_parameters
+from src._execution_formatting import enter_to_continue
+from src._execution_formatting import get_files_in_folder
+from src._execution_formatting import print_progress_message
+from src._execution_formatting import print_execution_parameters
 
 
 ################################################################################################
 # module of aux functions related to img preprocessing
 
 
-def enhance_single_img(og_img_path: str,
-                       output_path: str,
-                       ) -> None:
+def unbinarize_single_img(og_img_path: str,
+                          output_path: str,
+                          ) -> None:
     """
-    This function takes the path to a poor quality image,
-    and saves a new image enhanced by CLAHE
+    This function takes the path to an image with one intensity of pixel
+    and returns an image in a grayscale so each object can be identified
     """
-    img = imread(og_img_path, IMREAD_GRAYSCALE)
+    # read img
+    img = cv.imread(og_img_path, cv.IMREAD_GRAYSCALE)
 
-    # create a CLAHE object (Arguments are optional).
-    clahe = createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    cl1 = clahe.apply(img)
+    # connect elements
+    labeled_img = sk_label(img)
 
-    imwrite(output_path, cl1)
+    # transform it into uint 8 for visibility
+    labeled_img = labeled_img.astype(np.uint8)
+
+    # saving image
+    sk_imsave(output_path,
+              labeled_img,
+              check_contrast=False)
 
     return
 
 
-def enhance_dir_imgs(input_folder: str,
-                     output_folder: str,
-                     img_extension: str
-                     ) -> None:
+def unbinarize_dir_imgs(input_folder: str,
+                        output_folder: str,
+                        img_extension: str
+                        ) -> None:
     """
     This function takes an input folder containing all the
     imgs to be processed, and loops through each image processing it
+    based on the previous shown function
     """
     # getting img files in respective input folder
     img_files = get_files_in_folder(path_to_folder=input_folder,
@@ -63,9 +69,9 @@ def enhance_dir_imgs(input_folder: str,
         output_path = join(output_folder,
                            img_file)
 
-        # runnning img processing func
-        enhance_single_img(og_img_path=img_input_path,
-                           output_path=output_path)
+        # running img processing func
+        unbinarize_single_img(og_img_path=img_input_path,
+                              output_path=output_path)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -141,9 +147,9 @@ def main():
     enter_to_continue()
 
     # running function to preprocess images in a folder
-    enhance_dir_imgs(input_folder=input_folder,
-                     output_folder=output_folder,
-                     img_extension=images_extension)
+    unbinarize_dir_imgs(input_folder=input_folder,
+                        output_folder=output_folder,
+                        img_extension=images_extension)
 
 
 ######################################################################
@@ -155,14 +161,3 @@ if __name__ == '__main__':
 
 ######################################################################
 # end of current module
-
-
-
-# Open the TIFF image
-tiff_image = Image.open("example.tif")
-
-# Convert to RGB mode for JPEG
-jpeg_image = tiff_image.convert("RGB")
-
-# Save as a JPEG file
-jpeg_image.save("example.jpg")

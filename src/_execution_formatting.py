@@ -1,3 +1,8 @@
+# imports
+from sys import stdout
+from os import listdir
+##################################################################################
+# functions
 def spacer(char: str = '_',
            reps: int = 50
            ) -> None:
@@ -150,3 +155,25 @@ def enter_to_continue():
 
     # waiting for user input
     input(enter_string)
+
+def get_files_in_folder(path_to_folder: str,
+                        extension: str
+                        ) -> list:
+    """
+    Given a path to a folder, returns a list containing
+    all files in folder that match given extension.
+    """
+    # getting all files in folder
+    all_files_in_folder = listdir(path_to_folder)
+
+    # getting specific files
+    files_in_dir = [file  # getting file
+                    for file  # iterating over files
+                    in all_files_in_folder  # in input folder
+                    if file.endswith(extension)]  # only if file matches given extension
+
+    # sorting list
+    files_in_dir = sorted(files_in_dir)
+
+    # returning list
+    return files_in_dir
