@@ -6,10 +6,10 @@ import tensorflow as tf
 import tifffile
 import numpy as np
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import get_files_in_folder
-from src.utils.aux_funcs import print_execution_parameters
+from src._execution_formatting import enter_to_continue
+from src._execution_formatting import print_progress_message
+from src._execution_formatting import get_files_in_folder
+from src._execution_formatting import print_execution_parameters
 ###############################################################################
 
 # argument parsing related functions

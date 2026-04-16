@@ -25,7 +25,7 @@ from src.tabular._texture_features import get_intensity_features
 from src.tabular._geometric_features import get_morpho_features
 from os.path import join
 import tifffile
-from src.utils.aux_funcs import make_contour_label
+from src._io import make_contour_label
 from src.tabular._texture_features import get_glcm_features
 from src.tabular._texture_features import run_lbp_metrics
 from src.imaging._img_subprocess import get_unique_ids

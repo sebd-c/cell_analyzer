@@ -1,6 +1,7 @@
 # imports
 from sys import stdout
-from os import listdir
+import os
+
 ##################################################################################
 # functions
 def spacer(char: str = '_',
@@ -164,7 +165,7 @@ def get_files_in_folder(path_to_folder: str,
     all files in folder that match given extension.
     """
     # getting all files in folder
-    all_files_in_folder = listdir(path_to_folder)
+    all_files_in_folder = os.listdir(path_to_folder)
 
     # getting specific files
     files_in_dir = [file  # getting file
@@ -177,3 +178,38 @@ def get_files_in_folder(path_to_folder: str,
 
     # returning list
     return files_in_dir
+
+def make_dir_list(class_list: str,
+                  output_folder: str
+                  ) -> dict:
+
+    """
+    Given a list of strings,
+    makes a directory with the name of each of them
+    in a specified folder and returns
+    a dict with folder name and path
+    """
+    # empty list to save names
+    output_path_list = []
+
+    # empty dict to save
+    output_path_dict = {}
+
+    # make a loop to create directories
+    for class_name in class_list:
+        # define class path
+        class_path = os.path.join(output_folder, class_name)
+
+        # make directory
+        os.makedirs(class_path, exist_ok=True)
+
+        # append list of directories
+        output_path_list.append(class_path)
+
+        # organize in dict
+        dict_line = {class_name: class_path}
+
+        output_path_dict.update(dict_line)
+        #update dict
+
+    return output_path_dict

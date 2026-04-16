@@ -1,6 +1,4 @@
 # generate segmentation dfs module
-import numpy as np
-from math import ceil
 print('initializing...')  # noqa
 
 # Code destined to generating
@@ -12,29 +10,18 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from os.path import join
-from cv2 import threshold, THRESH_BINARY
-import tifffile
-from cv2 import imread, normalize, NORM_MINMAX
-from cv2 import split
-from cv2 import FILLED
-from cv2 import imwrite
-from cv2 import boundingRect
-from cv2 import drawContours
-from pandas import DataFrame
-from pandas import read_pickle
-from pandas import concat
-from numpy import ndarray
-from numpy import uint8 as np_uint8
-from numpy import zeros as np_zeros
+import cv2 as cv
+import pandas as pd
+import numpy as np
 from argparse import ArgumentParser
 from src._execution_formatting import enter_to_continue
 from src._execution_formatting import print_progress_message
 from src._execution_formatting import get_files_in_folder
 from src._execution_formatting import print_execution_parameters
 from src.imaging._img_subprocess import apply_mask
-from src.utils.aux_funcs import make_crop
-from src.utils.aux_funcs import make_crop_rotate
-from src.utils.aux_funcs import save_img
+from src.imaging._img_subprocess import make_crop
+from src.imaging._img_subprocess import make_crop_rotate
+from src._io import save_img
 
 
 print('all required libraries successfully imported.')  # noqa
@@ -43,12 +30,12 @@ print('all required libraries successfully imported.')  # noqa
 #####################################################################
 
 # module specific aux functions
-def make_single_crop(image: ndarray,
-                     contour:ndarray,
-                     cx: int or float,
-                     cy: int or float,
-                     max_width: int or float,
-                     max_height: int or float,
+def make_single_crop(image: np.ndarray,
+                     contour: np.ndarray,
+                     cx: int | float,
+                     cy: int | float,
+                     max_width: int | float,
+                     max_height: int | float,
                      output_folder: str,
                      crop_name: str
                      ) -> None:
@@ -68,10 +55,10 @@ def make_single_crop(image: ndarray,
 
     # creates mask to hold cytoplasm contour
     # for noise cleaning process outside object
-    mask = np_zeros(shape, dtype=np_uint8)
+    mask = np.zeros(shape, dtype=np.uint8)
 
     # filling mask image
-    drawContours(mask, [contour], -1, pixel_intensity, FILLED)
+    cv.drawContours(mask, [contour], -1, pixel_intensity, cv.FILLED)
 
     # apply mask to make a clean image
     clean_image = apply_mask(image=image,
@@ -79,7 +66,7 @@ def make_single_crop(image: ndarray,
                              pixel_intensity=pixel_intensity)
 
     # get object metrics for flipping conditional
-    _, _, w, h = boundingRect(contour)
+    _, _, w, h = cv.boundingRect(contour)
 
     # if the object is in another rotation, flip it
     if w > h:
@@ -104,8 +91,9 @@ def make_single_crop(image: ndarray,
                                 x2=x2,
                                 y1=y1,
                                 y2=y2,
-                                max_width=max_width,
-                                max_height=max_height)
+                                max_width=int(max_width),
+                                max_height=int(max_height)
+                                )
 
     else:
 
@@ -128,8 +116,8 @@ def make_single_crop(image: ndarray,
                          x2=x2,
                          y1=y1,
                          y2=y2,
-                         max_width=max_width,
-                         max_height=max_height
+                         max_width=int(max_width),
+                         max_height=int(max_height)
                          )
 
     # saving crops
@@ -143,9 +131,9 @@ def make_image_crops(cyto_path: str,
                      nuc_path: str,
                      phase_path: str,
                      image_name: str,
-                     df: DataFrame,
-                     max_width: int or float,
-                     max_height: int or float,
+                     df: pd.DataFrame,
+                     max_width: int | float,
+                     max_height: int | float,
                      cyto_output_folder: str,
                      nuc_output_folder: str,
                      phase_output_folder: str,
@@ -160,16 +148,16 @@ def make_image_crops(cyto_path: str,
     """
 
     # reading grayscale image
-    cyto_image = imread(cyto_path,
-                        -1)
+    cyto_image = cv.imread(cyto_path,
+                           -1)
 
     # reading grayscale image
-    nuc_image = imread(nuc_path,
-                        -1)
+    nuc_image = cv.imread(nuc_path,
+                       -1)
 
     # reading grayscale image
-    phase_image = imread(phase_path,
-                        -1)
+    phase_image = cv.imread(phase_path,
+                            -1)
 
     # takeout channel from img name
     image_name = image_name.replace('green', '')
@@ -177,7 +165,7 @@ def make_image_crops(cyto_path: str,
     image_name = image_name.replace('phase', '')
 
     # segment the df to loop only on this image's objects
-    image_df = df[df['image_name'] == image_name]
+    image_df = df[df['cyto_image_name'] == image_name]
 
     # since there are repeated cytoplasms, delete duplicates to make a unique df
     unique_df = image_df.drop_duplicates(subset=['image_name', 'cyto_id'], keep='first')
@@ -265,7 +253,7 @@ def make_folder_crops(cyto_input_folder: str,
     """
 
     # read csv
-    df = read_pickle(df_path)
+    df = pd.read_pickle(df_path)
 
     # variables to save width/height values
     max_height = float('-inf')
@@ -275,7 +263,7 @@ def make_folder_crops(cyto_input_folder: str,
     for index, row in df.iterrows():
 
         # use open cv bb to get min rect shape
-        x, y, w, h = boundingRect(row['cyto_contour'])
+        x, y, w, h = cv.boundingRect(row['cyto_contour'])
 
         # as a big object in height or width are the same
         # set one variable to always be the bigger one (some objects will be "flipped" in the end)

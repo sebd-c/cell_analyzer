@@ -13,14 +13,10 @@ print('initializing...')  # noqa
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
 import cv2 as cv
-# from cv2 import pointPolygonTest
 import pandas as pd
-# from pandas import concat
-# from pandas import DataFrame
-# from pandas import read_pickle
 from os.path import join
 from src._execution_formatting import print_execution_parameters
-from src.utils.merge_channels import merge_multiple_images
+from src._io import merge_multiple_images
 
 print('all required libraries successfully imported.')  # noqa
 
@@ -79,22 +75,24 @@ def link_cytnuc(cyt_df: pd.DataFrame,
     cyt_df['image_name'] = cyt_df['image_name'].replace('green', '', regex=True)
     nuc_df['image_name'] = nuc_df['image_name'].replace('red', '', regex=True)
 
+    cyt_df = cyt_df.add_prefix('cyto_')
+    nuc_df = nuc_df.add_prefix('nuc_')
     # loop of nucleus through the cytoplasm df
     for nucleus_index, nuc_row in nuc_df.iterrows():
 
         # conditional to loop only in the cytoplasms
         # that have matching img name as the nucleus
-        cyt_df_img = cyt_df[cyt_df['image_name'] == nuc_row['image_name']]
+        cyt_df_img = cyt_df[cyt_df['cyto_image_name'] == nuc_row['nuc_image_name']]
 
         for cyto_index, cyto_row in cyt_df_img.iterrows():
             # get current cyto
-            cyto_contour = cyto_row['contour']
+            cyto_contour = cyto_row['cyto_contour']
 
             # test if a point is inside an object
             if cv.pointPolygonTest(cyto_contour,
                                 # if it is, it'll be a match parent cytoplasm
                                 # measureDist 0 or 1
-                                (nuc_row['cx_coords'], nuc_row['cy_coords']),
+                                (nuc_row['nuc_cx_coords'], nuc_row['nuc_cy_coords']),
                                 measureDist=False) > -1:
                 # if (nuc_row['cx_coords'], nuc_row['cy_coords']) in cyto_row['pixel_coords_list']:
                 # if the nucleus is nested in the contour,
@@ -103,90 +101,7 @@ def link_cytnuc(cyt_df: pd.DataFrame,
                 # begin making a row for the new joint df
                 #TODO: add flag d cyto/nuc no inicio pra
                 # concatenar verticalmente sem essa baixaria
-                linked_dict = {'image_name': cyto_row['image_name'],
-                               'cyto_id': cyto_row['contour_index'],
-                               'cyto_cx': cyto_row['cx_coords'],
-                               'cyto_cy': cyto_row['cy_coords'],
-                               'cyto_area': cyto_row['area'],
-                               'cyto_arbox': cyto_row['area_box'],
-                               'cyto_radra': cyto_row['radius_ratio'],
-                               'cyto_asp': cyto_row['aspect'],
-                               'cyto_ecc': cyto_row['eccentricity'],
-                               'cyto_rou': cyto_row['roundness'],
-                               'cii': cyto_row['ii'],
-                               'cyto_contour': [cyto_row['contour']],
-                               'cyto_grayscale_mean': cyto_row['grayscale_mean'],
-                               'cyto_grayscale_median': cyto_row['grayscale_median'],
-                               'cyto_grayscale_max': cyto_row['grayscale_max'],
-                               'cyto_grayscale_min':cyto_row['grayscale_min'],
-                               'cyto_grayscale_sum': cyto_row['grayscale_sum'],
-                               'cyto_grayscale_int_density': cyto_row['grayscale_int_density'],
-                               'cyto_red_mean': cyto_row['red_mean'],
-                               'cyto_red_median': cyto_row['red_median'],
-                               'cyto_red_max': cyto_row['red_max'],
-                               'cyto_red_min': cyto_row['red_min'],
-                               'cyto_red_sum': cyto_row['red_sum'],
-                               'cyto_red_int_density': cyto_row['red_int_density'],
-                               'cyto_green_mean': cyto_row['green_mean'],
-                               'cyto_green_median': cyto_row['green_median'],
-                               'cyto_green_max': cyto_row['green_max'],
-                               'cyto_green_min': cyto_row['green_min'],
-                               'cyto_green_sum': cyto_row['green_sum'],
-                               'cyto_green_int_density': cyto_row['green_int_density'],
-                               'cyto_blue_mean': cyto_row['blue_mean'],
-                               'cyto_blue_median': cyto_row['blue_median'],
-                               'cyto_blue_max': cyto_row['blue_max'],
-                               'cyto_blue_min': cyto_row['blue_min'],
-                               'cyto_blue_sum': cyto_row['blue_sum'],
-                               'cyto_blue_int_density': cyto_row['blue_int_density'],
-                               'nuc_id': nuc_row['contour_index'],
-                               'nuc_cx': nuc_row['cx_coords'],
-                               'nuc_cy': nuc_row['cy_coords'],
-                               'nuc_area': nuc_row['area'],
-                               'nuc_arbox': nuc_row['area_box'],
-                               'nuc_radra': nuc_row['radius_ratio'],
-                               'nuc_asp': nuc_row['aspect'],
-                               'nuc_ecc': nuc_row['eccentricity'],
-                               'nuc_rou': nuc_row['roundness'],
-                               'nii': nuc_row['ii'],
-                               'nuc_contour': [nuc_row['contour']],
-                               'nuc_grayscale_mean': nuc_row['grayscale_mean'],
-                               'nuc_grayscale_median': nuc_row['grayscale_median'],
-                               'nuc_grayscale_max': nuc_row['grayscale_max'],
-                               'nuc_grayscale_min': nuc_row['grayscale_min'],
-                               'nuc_grayscale_sum': nuc_row['grayscale_sum'],
-                               'nuc_grayscale_int_density': nuc_row['grayscale_int_density'],
-                               'nuc_red_mean': nuc_row['red_mean'],
-                               'nuc_red_median': nuc_row['red_median'],
-                               'nuc_red_max': nuc_row['red_max'],
-                               'nuc_red_min': nuc_row['red_min'],
-                               'nuc_red_sum': nuc_row['red_sum'],
-                               'nuc_red_int_density': nuc_row['red_int_density'],
-                               'nuc_green_mean': nuc_row['green_mean'],
-                               'nuc_green_median': nuc_row['green_median'],
-                               'nuc_green_max': nuc_row['green_max'],
-                               'nuc_green_min': nuc_row['green_min'],
-                               'nuc_green_sum': nuc_row['green_sum'],
-                               'nuc_green_int_density': nuc_row['green_int_density'],
-                               'nuc_blue_mean': nuc_row['blue_mean'],
-                               'nuc_blue_median': nuc_row['blue_median'],
-                               'nuc_blue_max': nuc_row['blue_max'],
-                               'nuc_blue_min': nuc_row['blue_min'],
-                               'nuc_blue_sum': nuc_row['blue_sum'],
-                               'nuc_blue_int_density': nuc_row['blue_int_density']
-                               # 'xgal_e': cyto_row['xgal_e'],
-                               # 'xgal_d': cyto_row['xgal_d'],
-                               # 'xgal_h': cyto_row['xgal_h'],
-                               # 's_status_e': cyto_row['s_status_e'],
-                               # 's_status_d': cyto_row['s_status_d'],
-                               # 's_status_h': cyto_row['s_status_h'],
-                               # 'cons_xgal': cyto_row['cons_xgal'],
-                               # 'cons_sstatus': cyto_row['cons_sstatus'],
-                               # 'label': cyto_row['label']
-                               }
-
-                # make the new dictionary into a temporary one row df
-                linked_df = pd.DataFrame(linked_dict, index=[0])
+                linked_df = pd.concat([cyto_row, nuc_row], axis=1)
 
                 # append the newly made df into a list
                 linked_dfs_list.append(linked_df)
@@ -207,8 +122,8 @@ def link_cytnuc(cyt_df: pd.DataFrame,
 
 def make_cytnuc_output(cyt_csv_input_path: str,
                        nuc_csv_input_path: str,
-                       nuc_overlayed_input_folder: str,
-                       cyto_overlayed_input_folder: str,
+                       nuc_overlay_input_folder: str,
+                       cyto_overlay_input_folder: str,
                        img_extension: str,
                        csv_output_folder: str,
                        joined_overlays_output_folder: str,
@@ -219,11 +134,11 @@ def make_cytnuc_output(cyt_csv_input_path: str,
     of both, joins this two dfs
     relating each nucleus to a parent
     and saves the results in the output folder,
-    as well as a merged version of the overlayed images.
+    as well as a merged version of the overlay-ed images.
     """
     # merging nuclei and cytoplasm imgs
-    merge_multiple_images(nuclei_folder=nuc_overlayed_input_folder,
-                          cyto_folder=cyto_overlayed_input_folder,
+    merge_multiple_images(nuclei_folder=nuc_overlay_input_folder,
+                          cyto_folder=cyto_overlay_input_folder,
                           output_folder=joined_overlays_output_folder,
                           img_extension=img_extension)
 
@@ -346,8 +261,8 @@ def main():
     # runnning join
     make_cytnuc_output(cyt_csv_input_path=cyto_input_csv,
                        nuc_csv_input_path=nuc_input_csv,
-                       nuc_overlayed_input_folder=nuc_images_folder,
-                       cyto_overlayed_input_folder=cyto_images_folder,
+                       nuc_overlay_input_folder=nuc_images_folder,
+                       cyto_overlay_input_folder=cyto_images_folder,
                        img_extension=images_extension,
                        csv_output_folder=csv_output_folder,
                        joined_overlays_output_folder=overlays_output_folder,

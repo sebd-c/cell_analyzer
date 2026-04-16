@@ -10,16 +10,13 @@ print('initializing...')  # noqa
 
 # importing required libraries
 print('importing required libraries...')  # noqa
-from cv2 import imread
-from cv2 import imwrite
-from cv2 import addWeighted
-from cv2 import IMREAD_GRAYSCALE
+import cv2 as cv
 from os.path import join
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import print_execution_parameters
-from src.utils.aux_funcs import get_files_in_folder
+from src._execution_formatting import enter_to_continue
+from src._execution_formatting import print_progress_message
+from src._execution_formatting import print_execution_parameters
+from src._execution_formatting import get_files_in_folder
 
 print('all required libraries successfully imported.')  # noqa
 
@@ -84,15 +81,15 @@ def merge_single_image(nuc_path: str,
     """
 
     # reading red/green images
-    nucleus = imread(nuc_path, IMREAD_GRAYSCALE)
-    cytoplasm = imread(cyto_path, IMREAD_GRAYSCALE)
+    nucleus = cv.imread(nuc_path, cv.IMREAD_GRAYSCALE)
+    cytoplasm = cv.imread(cyto_path, cv.IMREAD_GRAYSCALE)
 
     # add(or blend) the images
-    merged_img = addWeighted(nucleus, 0.5, cytoplasm, 0.5, 0)
+    merged_img = cv.addWeighted(nucleus, 0.5, cytoplasm, 0.5, 0)
 
     # saving merged image
-    imwrite(output_path,
-            merged_img)
+    cv.imwrite(output_path,
+               merged_img)
 
     # # getting image halves (important to join them later and max still be 255)
     # red_half = red / 2

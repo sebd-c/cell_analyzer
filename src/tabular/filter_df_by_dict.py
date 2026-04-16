@@ -1,22 +1,24 @@
 ###########################################################################################
 # imports
 from os.path import join
-from pandas import DataFrame
+import pandas as pd
+# from pandas import DataFrame
 from pandas import concat
-from yaml import safe_load
-from pandas import read_pickle
+import yaml
+# from yaml import safe_load
+# from pandas import read_pickle
 from argparse import ArgumentParser
-from src.utils.aux_funcs import enter_to_continue
-from src.utils.aux_funcs import print_execution_parameters
+from src._execution_formatting import enter_to_continue
+from src._execution_formatting import print_execution_parameters
 
 
 ################################################################################################
 # module of aux functions related to img preprocessing
 
 
-def filter_df(unfiltered_df: DataFrame,
+def filter_df(unfiltered_df: pd.DataFrame,
               dict_path: str,
-              ) -> DataFrame:
+              ) -> pd.DataFrame:
     """
     This function takes the path to an unfiltered df,
     and saves a new df after using a filter dictionary
@@ -24,15 +26,15 @@ def filter_df(unfiltered_df: DataFrame,
     """
     # open parameters file
     with open(dict_path, 'r') as open_file:
-        filter_params = safe_load(open_file)
+        filter_params = yaml.safe_load(open_file)
 
     # turn it into a dict
     filter_dict = filter_params['data_dict']
 
     # make the dictionary into a df
     # params_df = DataFrame.from_dict(filter_dict)
-    params_df = DataFrame([(k, v) for k, vs in filter_dict.items() for v in vs],
-                          columns=['image_name', 'cyto_id'])
+    params_df = pd.DataFrame([(k, v) for k, vs in filter_dict.items() for v in vs],
+                             columns=['image_name', 'cyto_id'])
 
     # now that we have both the complete df and the
     # filter the df using a left outer join
@@ -61,7 +63,7 @@ def filter_data(input_path: str,
     """
 
     # reading treatment df
-    df = read_pickle(input_path)
+    df = pd.read_pickle(input_path)
 
     # applying filter function
     filtered_df = filter_df(df, filter_path)

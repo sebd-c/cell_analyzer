@@ -12,27 +12,24 @@ print('initializing...')  # noqa
 # importing required libraries
 print('importing required libraries...')  # noqa
 from argparse import ArgumentParser
-from cv2 import imread
-from cv2 import imwrite
-from pandas import DataFrame
-from pandas import read_pickle
+import cv2 as cv
+import pandas as pd
 from os.path import join
-from re import split
-from src.utils.aux_funcs import make_dir_list
-from src.utils.aux_funcs import save_img
-from src.utils.aux_funcs import print_progress_message
-from src.utils.aux_funcs import get_files_in_folder
-from src.utils.aux_funcs import print_execution_parameters
+import re
+from src._execution_formatting import make_dir_list
+from src._io import save_img
+from src._execution_formatting import print_progress_message
+from src._execution_formatting import get_files_in_folder
+from src._execution_formatting import print_execution_parameters
 
 print('all required libraries successfully imported.')  # noqa
 
 
 #####################################################################
 # module specific aux functions
-#TODO: modify the names so the accepted df is the final one
 def organize_crop(crop_path: str,
                   crop_name: str,
-                  df: DataFrame,
+                  df: pd.DataFrame,
                   output_folder_dict: dict
                   ) -> None:
     """
@@ -43,7 +40,7 @@ def organize_crop(crop_path: str,
     """
 
     # reading crop image
-    crop = imread(crop_path,
+    crop = cv.imread(crop_path,
                    -1)
 
     # label dict for translation from df to directory name
@@ -51,22 +48,19 @@ def organize_crop(crop_path: str,
 
     # refactor df
     df['label'] = df['label'].replace(label_dict)
-    #TODO: fixing (likely on generate crops instead)
-
-    # locate crop in df
-    # crop_row = df.loc[df['crop_name'] == crop_name]
 
     # create crop name split for identification in df
-    crop_name_split = split(r"[_.]", crop_name)
+    crop_name_split = re.split(r"[_.]", crop_name)
 
     # recreate image name
+    # refer to make_image_crops() in generate_crops.py to check order
     img_name = crop_name_split[1] + '.' + crop_name_split[4]
 
     # do the same for crop id for matching type
     crop_id = int(crop_name_split[3])
 
     # identify crop in df to get label
-    crop_row = df[(df['cyto_id'] == crop_id) & (df['image_name'] == img_name)]
+    crop_row = df[(df['cyto_index'] == crop_id) & (df['cyto_image_name'] == img_name)]
 
     ##### end of fixing
     # need to change the row of df format to series, thus:
@@ -100,7 +94,7 @@ def organize_crops_folder(images_input_folder: str,
     """
 
     # read csv
-    df = read_pickle(df_path)
+    df = pd.read_pickle(df_path)
 
     # getting image files in respective input folder
     crop_files = get_files_in_folder(path_to_folder=images_input_folder,

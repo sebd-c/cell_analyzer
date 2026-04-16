@@ -124,4 +124,4 @@ def make_crop_rotate(image: np.ndarray,
     return oriented_crop
 
 #################################################################
-# mask manipulation functions
+# image generation functions

@@ -175,7 +175,7 @@ def get_morpho_features(contour: np.ndarray,
 
     # now moving to organizing them into a dictionary
     morpho_dict = {'image_name': mask_name,
-                    'contour_index': int(pixel_int),
+                    'index': int(pixel_int),
                     'cx_coords': centroid_x,
                     'cy_coords': centroid_y,
                     'area': area,
