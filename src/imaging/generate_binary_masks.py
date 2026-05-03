@@ -11,7 +11,6 @@ print('initializing...')  # noqa
 
 # importing required libraries
 print('importing required libraries...')  # noqa
-from numpy import stack
 from os.path import join
 import numpy as np
 import cv2 as cv
@@ -80,11 +79,11 @@ def mask_single_img(image: np.ndarray,
         if area_check:
 
             # adding current contour to blank image
-            drawContours(image=image,  # noqa
-                         contours=[contour],
-                         contourIdx=-1,
-                         color=255,
-                         thickness=-1)
+            cv.drawContours(image=image,  # noqa
+                            contours=[contour],
+                            contourIdx=-1,
+                            color=255,
+                            thickness=-1)
 
     # returning filtered mask image
     return image
