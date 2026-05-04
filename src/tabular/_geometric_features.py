@@ -6,6 +6,7 @@
 import numpy as np
 import cv2 as cv
 import math as m
+from polylabel import polylabel
 #################################################################
 # functions
 def get_contour_centroid(contour: np.ndarray) -> tuple:
@@ -22,7 +23,22 @@ def get_contour_centroid(contour: np.ndarray) -> tuple:
     cx = int(contour_moments['m10'] / contour_moments['m00'])
     cy = int(contour_moments['m01'] / contour_moments['m00'])
 
-    return cx, cy
+    # If the geometric centroid falls inside the contour,
+    # use the standard centroid
+    if cv.pointPolygonTest(contour,
+                           (cx, cy),
+                           measureDist=False) > 0:
+        return int(round(cx)), int(round(cy))
+    else:
+        polygon = contour.reshape(-1, 2).tolist()
+
+        if polygon[0] != polygon[-1]:
+            polygon.append(polygon[0])
+
+        cx, cy = polylabel([polygon])
+
+        return int(round(cx)), int(round(cy))
+
 
 def get_area_box(contour: np.ndarray, contour_area: float) -> float:
     """
