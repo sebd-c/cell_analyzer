@@ -2,6 +2,7 @@
 # imports
 from os.path import join
 import cv2 as cv
+import numpy as np
 from argparse import ArgumentParser
 from src._execution_formatting import enter_to_continue
 from src._execution_formatting import get_files_in_folder
@@ -24,6 +25,20 @@ def enhance_single_img(og_img_path: str,
     """
     img = cv.imread(og_img_path, cv.IMREAD_GRAYSCALE)
 
+    # apply Z-score normalization
+    mean = np.mean(img)
+    std = np.std(img)
+
+    # use a small epsilon to avoid division by zero
+    normalized_img = (img - mean) / (std + 1e-6)
+
+    # Scale back to 0-255
+    rescaled_img = (255.0 * (normalized_img - np.min(normalized_img)) /
+                    (np.max(normalized_img) - np.min(normalized_img) + 1e-6))
+
+    rescaled_img = rescaled_img.astype(np.uint8)
+
+    # apply histogram equalization
     clip_limit = int(clip_limit)
     tile_size = int(tile_size)
     # create a CLAHE object
@@ -31,8 +46,8 @@ def enhance_single_img(og_img_path: str,
                            tileGridSize=(tile_size, tile_size)
                            )
 
-    # apply in image
-    cl1 = clahe.apply(img)
+    # apply in normalized image
+    cl1 = clahe.apply(rescaled_img)
 
     # save clahe-d img
     cv.imwrite(output_path, cl1)

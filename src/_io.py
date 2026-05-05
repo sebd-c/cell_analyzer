@@ -20,8 +20,11 @@ def merge_single_image(nuc_path: str,
     """
 
     # reading red/green images
-    nucleus = cv.imread(nuc_path, cv.IMREAD_GRAYSCALE)
-    cytoplasm = cv.imread(cyto_path, cv.IMREAD_GRAYSCALE)
+    nucleus = cv.imread(nuc_path, -1)
+    # make img rgb for colored outlines
+
+    cytoplasm = cv.imread(cyto_path, -1)
+    # make img rgb for colored outlines
 
     # add(or blend) the images
     merged_img = cv.addWeighted(nucleus, 0.5, cytoplasm, 0.5, 0)
@@ -120,8 +123,8 @@ def make_contour_label(contour_index: int,
     Writes a single contour label in an image
     """
 
-    # make img rgb for colored outlines
-    colored_img = cv2.cvtColor(img_to_label, cv2.COLOR_GRAY2BGR)
+    # # make img rgb for colored outlines
+    # colored_img = cv.cvtColor(img_to_label, cv.COLOR_BGR2RGB)
 
     # making prep to put outlines and labels
     # fontScale
@@ -135,7 +138,7 @@ def make_contour_label(contour_index: int,
 
     # the following is not related to the dict
     # but using the loop in the contours list
-    cv.putText(colored_img,
+    cv.putText(img_to_label,
                str(contour_index),
                (int(centroid_x), int(centroid_y)),
                font,

@@ -1,9 +1,6 @@
 # generate segmentation dfs module
 from typing import Any
 
-import numpy as np
-from sqlalchemy.util import to_list
-
 print('initializing...')  # noqa
 
 # Code destined to generating
@@ -12,7 +9,7 @@ print('initializing...')  # noqa
 ######################################################################
 # imports
 # variable bgr
-COLOR = (255, 0, 0)
+COLOR = (0, 255, 0)
 # importing required libraries
 print('importing required libraries...')  # noqa
 import argparse as ap
@@ -59,6 +56,8 @@ def process_single_contour(single_contour_img: np.ndarray,
     :return:
     """
 
+    phase_rgb = cv.merge([phase_blue, phase_green, phase_red])
+
     # converting int type
     single_contour_img = single_contour_img.astype(np.uint8)
 
@@ -66,6 +65,8 @@ def process_single_contour(single_contour_img: np.ndarray,
     contour, _ = cv.findContours(single_contour_img,
                                  cv.RETR_EXTERNAL,
                                  cv.CHAIN_APPROX_NONE)
+    print(type(contour))
+    exit()
     # getting current contour area
     area = cv.contourArea(contour)
     print(area)
@@ -137,7 +138,7 @@ def process_single_contour(single_contour_img: np.ndarray,
                            centroid_y=single_contour_df['cy_coords'].iloc[0],
                            color=COLOR,
                            thickness=2,
-                           img_to_label=image,
+                           img_to_label=phase_rgb,
                            contour=contour[0],
                            )
 
