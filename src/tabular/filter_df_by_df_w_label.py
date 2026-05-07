@@ -36,7 +36,7 @@ def merge_label_df(infos_df_path: str,
     # now that we have both the complete df and the
     # filter the df using a left outer join
     labeled_df = infos_df.merge(labels_df,
-                                on=['image_name', 'cyto_id', 'nuc_id'],
+                                on=['cyto_image', 'cyto_index'],
                                 how='left',
                                 indicator=True
                                 )
@@ -54,11 +54,11 @@ def merge_label_df(infos_df_path: str,
     # if not xgal and senescent like -> blocked lisossomal senescence (0, 1) = 3
 
     # first sum up the two consensus columns
-    labeled_df['label'] = labeled_df['cons_xgal'] + labeled_df['cons_sstatus']
+    labeled_df['label'] = labeled_df['cons_xgal'] + labeled_df['cons_morph_status']
 
     # then transform the result into a label
     # we'll be using most of the sum's results, only changing one of the onesies
-    labeled_df.loc[(labeled_df['label'] == 1) & (labeled_df['cons_sstatus'] == 1), 'label'] = 3
+    labeled_df.loc[(labeled_df['label'] == 1) & (labeled_df['cons_morph_status'] == 1), 'label'] = 3
 
     # create the path to save the output path
     output_path = join(output_folder,

@@ -99,9 +99,9 @@ def link_cytnuc(cyt_df: pd.DataFrame,
 
                 # having the tested pointed out it's a parent,
                 # begin making a row for the new joint df
-                #TODO: add flag d cyto/nuc no inicio pra
-                # concatenar verticalmente sem essa baixaria
-                linked_df = pd.concat([cyto_row, nuc_row], axis=1)
+                linked_df = pd.DataFrame([{**cyto_row.to_dict(),
+                                           **nuc_row.to_dict()}]
+                                         )
 
                 # append the newly made df into a list
                 linked_dfs_list.append(linked_df)
@@ -112,6 +112,12 @@ def link_cytnuc(cyt_df: pd.DataFrame,
 
     # concatenating contour df into bigger df
     # a pandas dataframe
+    if not linked_dfs_list:
+        raise ValueError(
+            "No nucleus-to-cytoplasm matches were found. "
+            "Check whether the contour/image naming conventions align."
+        )
+
     concat_linked_df = pd.concat(linked_dfs_list, ignore_index=True)
 
     # saving new df

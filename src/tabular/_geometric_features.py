@@ -162,7 +162,7 @@ def get_contour_roundness(contour: np.ndarray, contour_area: float) -> float:
     contour_perimeter = cv.arcLength(contour, True)
 
     # calculating roundness
-    roundness = (contour_perimeter ** 2) / (4 * contour_area * pi)
+    roundness = (contour_perimeter ** 2) / (4 * contour_area * m.pi)
 
     return roundness
 

@@ -40,6 +40,7 @@ def process_single_contour(single_contour_img: np.ndarray,
                            mask_name: str,
                            pixint: float,
                            image: np.ndarray,
+                           phase_rgb: np.ndarray,
                            phase_red: np.ndarray,
                            phase_green: np.ndarray,
                            phase_blue: np.ndarray
@@ -56,8 +57,6 @@ def process_single_contour(single_contour_img: np.ndarray,
     :return:
     """
 
-    phase_rgb = cv.merge([phase_blue, phase_green, phase_red])
-
     # converting int type
     single_contour_img = single_contour_img.astype(np.uint8)
 
@@ -65,10 +64,9 @@ def process_single_contour(single_contour_img: np.ndarray,
     contour, _ = cv.findContours(single_contour_img,
                                  cv.RETR_EXTERNAL,
                                  cv.CHAIN_APPROX_NONE)
-    print(type(contour))
-    exit()
+
     # getting current contour area
-    area = cv.contourArea(contour)
+    area = cv.contourArea(contour[0])
     print(area)
 
     # holder for all dicts
@@ -130,7 +128,7 @@ def process_single_contour(single_contour_img: np.ndarray,
         single_contour_dict.update(list_glcm_dict)
 
         # assembling contour df, i.e, making a row
-        single_contour_df = DataFrame(single_contour_dict, index=[0])  # noqa
+        single_contour_df = pd.DataFrame(single_contour_dict, index=[0])  # noqa
 
         # put label
         make_contour_label(contour_index=int(pixint),
@@ -228,6 +226,7 @@ def make_image_contours_df(mask_name: str,
                                             mask_name=mask_name,
                                             pixint=pixel_intensity,
                                             image=image,
+                                            phase_rgb=phase_image,
                                             phase_red=phase_red,
                                             phase_green=phase_green,
                                             phase_blue=phase_blue
@@ -242,7 +241,7 @@ def make_image_contours_df(mask_name: str,
     # save image with labels
     overlays_output_path = join(overlays_output_folder, mask_name)
 
-    cv.imwrite(overlays_output_path, image)
+    cv.imwrite(overlays_output_path, phase_image)
 
     # returning contours df
     return concat_contours_df
