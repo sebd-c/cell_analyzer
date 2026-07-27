@@ -6,7 +6,9 @@ import numpy as np
 from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout, BatchNormalization
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.layers import (Dense, GlobalAveragePooling2D, LayerNormalization,
+                                     GlobalAveragePooling1D, MultiHeadAttention,
+                                     Embedding, Add)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
@@ -19,6 +21,7 @@ from src.models.image_based.dataloader.dataset_api import (
 #################################################################################
 
 def build_model(img_size, num_channels, num_classes, lr):
+    """Build the ResNet50 classifier (kept for backwards-compatible imports)."""
     weights = "imagenet" if num_channels == 3 else None
     if weights is None:
         print("Warning: num_channels != 3, using random initialization for ResNet50.")
@@ -41,6 +44,101 @@ def build_model(img_size, num_channels, num_classes, lr):
                   metrics=["accuracy"]
                   )
 
+    return model
+
+
+def build_convnext_model(img_size, num_channels, num_classes, lr):
+    """Build a ConvNeXtBase classifier with an ImageNet-initialized backbone."""
+    if num_channels != 3:
+        raise ValueError("ConvNeXtBase requires three input channels.")
+
+    try:
+        from tensorflow.keras.applications import ConvNeXtBase
+    except ImportError as exc:
+        raise ImportError(
+            "ConvNeXt requires a TensorFlow/Keras version that provides "
+            "tf.keras.applications.ConvNeXtBase."
+        ) from exc
+
+    # ConvNeXt includes its own [0, 255] -> normalized preprocessing layer.
+    base_model = ConvNeXtBase(weights="imagenet",
+                             include_top=False,
+                             input_shape=(*img_size, num_channels),
+                             include_preprocessing=True)
+    base_model.trainable = False
+
+    x = GlobalAveragePooling2D()(base_model.output)
+    outputs = Dense(num_classes, activation="softmax")(x)
+    model = Model(inputs=base_model.input, outputs=outputs)
+    model.compile(optimizer=Adam(learning_rate=lr),
+                  loss="sparse_categorical_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+
+def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
+                    projection_dim=64, num_heads=4, transformer_layers=8,
+                    mlp_dim=128):
+    """Build a Vision Transformer classifier trained from scratch.
+
+    Unlike the ImageNet application backbones, this model accepts any positive
+    number of channels and consumes the dataset's existing [0, 1] float range.
+    """
+    height, width = img_size
+    if patch_size <= 0:
+        raise ValueError("ViT patch_size must be a positive integer.")
+    if height % patch_size or width % patch_size:
+        raise ValueError(
+            "ViT patch_size must evenly divide both image dimensions; got "
+            f"image size {img_size} and patch_size {patch_size}."
+        )
+    if num_heads <= 0:
+        raise ValueError("ViT num_heads must be a positive integer.")
+    if projection_dim % num_heads:
+        raise ValueError("ViT projection_dim must be divisible by num_heads.")
+    if transformer_layers <= 0:
+        raise ValueError("ViT transformer_layers must be a positive integer.")
+    if mlp_dim <= 0:
+        raise ValueError("ViT mlp_dim must be a positive integer.")
+
+    num_patches = (height // patch_size) * (width // patch_size)
+    inputs = tf.keras.Input(shape=(height, width, num_channels))
+    patches = Conv2D(projection_dim, kernel_size=patch_size,
+                     strides=patch_size, padding="valid")(inputs)
+    tokens = tf.keras.layers.Reshape((num_patches, projection_dim))(patches)
+
+    positions = tf.range(start=0, limit=num_patches, delta=1)
+    position_embedding = Embedding(input_dim=num_patches,
+                                   output_dim=projection_dim)(positions)
+    x = Add()([tokens, position_embedding])
+
+    for index in range(transformer_layers):
+        x1 = LayerNormalization(epsilon=1e-6,
+                                name=f"transformer_{index}_norm_1")(x)
+        attention = MultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=projection_dim // num_heads,
+            dropout=0.1,
+            name=f"transformer_{index}_attention",
+        )(x1, x1)
+        x2 = Add(name=f"transformer_{index}_attention_residual")([x, attention])
+
+        x3 = LayerNormalization(epsilon=1e-6,
+                                name=f"transformer_{index}_norm_2")(x2)
+        x3 = Dense(mlp_dim, activation=tf.nn.gelu,
+                   name=f"transformer_{index}_mlp_1")(x3)
+        x3 = Dropout(0.1, name=f"transformer_{index}_mlp_dropout")(x3)
+        x3 = Dense(projection_dim, name=f"transformer_{index}_mlp_2")(x3)
+        x = Add(name=f"transformer_{index}_mlp_residual")([x2, x3])
+
+    x = LayerNormalization(epsilon=1e-6, name="encoder_norm")(x)
+    x = GlobalAveragePooling1D(name="token_pooling")(x)
+    x = Dropout(0.2, name="classifier_dropout")(x)
+    outputs = Dense(num_classes, activation="softmax", name="classifier")(x)
+    model = Model(inputs=inputs, outputs=outputs, name="vision_transformer")
+    model.compile(optimizer=Adam(learning_rate=lr),
+                  loss="sparse_categorical_crossentropy",
+                  metrics=["accuracy"])
     return model
 
 
@@ -164,8 +262,9 @@ def main(args):
                 print(f"  Missing in data_dir ({cls}): {files[:5]}")
 
     effective_channels = args.num_channels
-    if args.model == "resnet50" and args.num_channels in (1, 2):
-        print("Warning: resnet50 expects 3 channels; upconverting to 3 channels.")
+    imagenet_models = {"resnet50", "convnext"}
+    if args.model in imagenet_models and args.num_channels in (1, 2):
+        print(f"Warning: {args.model} expects 3 channels; upconverting to 3 channels.")
         effective_channels = 3
 
     if args.mode == "kfold":
@@ -210,12 +309,23 @@ def main(args):
     if args.data_dir2 and args.num_channels != 2:
         print("Warning: data_dir2 provided but num_channels is not 2.")
 
-    if args.model == "resnet50" and effective_channels == 3:
-        def resnet_preprocess(x, y):
-            return preprocess_input(x * 255.0), y
+    if args.model in imagenet_models:
+        def imagenet_preprocess(x, y):
+            # The dataset API emits float images in [0, 1]. Both ResNet50 and
+            # ConvNeXt ImageNet backbones expect values expressed in [0, 255].
+            if args.model == "resnet50":
+                x = preprocess_input(x * 255.0)
+            else:
+                x = x * 255.0
+            return x, y
 
-        train_ds = train_ds.map(resnet_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-        val_ds = val_ds.map(resnet_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+        train_ds = train_ds.map(imagenet_preprocess,
+                                num_parallel_calls=tf.data.AUTOTUNE)
+        val_ds = val_ds.map(imagenet_preprocess,
+                            num_parallel_calls=tf.data.AUTOTUNE)
+        if test_ds is not None:
+            test_ds = test_ds.map(imagenet_preprocess,
+                                  num_parallel_calls=tf.data.AUTOTUNE)
 
     if args.model == "resnet50":
         model = build_model(img_size=(args.img_size, args.img_size),
@@ -223,6 +333,21 @@ def main(args):
                             num_classes=num_classes,
                             lr=args.lr
                             )
+    elif args.model == "convnext":
+        model = build_convnext_model(img_size=(args.img_size, args.img_size),
+                                     num_channels=effective_channels,
+                                     num_classes=num_classes,
+                                     lr=args.lr)
+    elif args.model == "vit":
+        model = build_vit_model(img_size=(args.img_size, args.img_size),
+                                num_channels=effective_channels,
+                                num_classes=num_classes,
+                                lr=args.lr,
+                                patch_size=args.vit_patch_size,
+                                projection_dim=args.vit_projection_dim,
+                                num_heads=args.vit_num_heads,
+                                transformer_layers=args.vit_transformer_layers,
+                                mlp_dim=args.vit_mlp_dim)
     else:
         model = build_custom_cnn(img_size=(args.img_size, args.img_size),
                                  num_channels=effective_channels,
@@ -233,7 +358,7 @@ def main(args):
     model.summary()
 
     callbacks = [tf.keras.callbacks.ModelCheckpoint(filepath=os.path.join(args.out_dir,
-                                                    f"resnet50_fold{args.fold}.keras"),
+                                                    f"{args.model}_fold{args.fold}.keras"),
                                                     monitor="val_loss",
                                                     save_best_only=True
                                                     ),
@@ -288,7 +413,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="ResNet50 training with stratified K-fold cross-validation"
+        description="Image classification training with stratified K-fold cross-validation"
     )
 
     parser.add_argument("--data_dir", type=str, required=True)
@@ -299,7 +424,12 @@ if __name__ == "__main__":
     parser.add_argument("--img_size", type=int, default=224)
     parser.add_argument("--num_channels", type=int, default=3)
     parser.add_argument("--model", type=str, default="custom",
-                        choices=["custom", "resnet50"])
+                        choices=["custom", "resnet50", "convnext", "vit"])
+    parser.add_argument("--vit_patch_size", type=int, default=16)
+    parser.add_argument("--vit_projection_dim", type=int, default=64)
+    parser.add_argument("--vit_num_heads", type=int, default=4)
+    parser.add_argument("--vit_transformer_layers", type=int, default=8)
+    parser.add_argument("--vit_mlp_dim", type=int, default=128)
     parser.add_argument("--mode", type=str, default="split",
                         choices=["split", "kfold"])
     parser.add_argument("--class_weight", type=str, default="balanced",
