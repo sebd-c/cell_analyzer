@@ -154,6 +154,39 @@ def collect_paired_files(data_dir_a: str,
     return file_paths_a, file_paths_b, labels, class_names
 
 
+def collect_triplet_files(data_dir_a: str,
+                          data_dir_b: str,
+                          data_dir_c: str,
+                          images_extension: str = ".tif"):
+    """Collect three explicitly matched channels from class-folder roots."""
+    roots = (data_dir_a, data_dir_b, data_dir_c)
+    class_sets = [
+        {d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))}
+        for root in roots
+    ]
+    class_names = sorted(set.intersection(*class_sets))
+    class_to_idx = {name: i for i, name in enumerate(class_names)}
+
+    paths = [[], [], []]
+    labels = []
+    for class_name in class_names:
+        file_maps = [
+            {
+                f.lower(): f for f in os.listdir(os.path.join(root, class_name))
+                if f.lower().endswith(images_extension.lower())
+            }
+            for root in roots
+        ]
+        for key in sorted(set.intersection(*(set(files) for files in file_maps))):
+            for index, root in enumerate(roots):
+                paths[index].append(
+                    os.path.join(root, class_name, file_maps[index][key])
+                )
+            labels.append(class_to_idx[class_name])
+
+    return paths[0], paths[1], paths[2], labels, class_names
+
+
 def check_paired_consistency(data_dir_a: str,
                              data_dir_b: str,
                              images_extension: str = ".tif"):
@@ -235,6 +268,27 @@ def load_tiff_pair_tf(path_a, path_b, label):
                          inp=[path_a, path_b],
                          Tout=tf.float32
                          )
+    img.set_shape([None, None, None])
+    return img, label
+
+
+def load_tiff_triplet_py(path_a, path_b, path_c):
+    images = []
+    for path in (path_a, path_b, path_c):
+        image = tifffile.imread(path.numpy().decode("utf-8")).astype(np.float32)
+        image = (image - image.min()) / (image.max() - image.min() + 1e-6)
+        if image.ndim == 2:
+            image = image[..., None]
+        images.append(image)
+    return np.concatenate(images, axis=-1).astype(np.float32)
+
+
+def load_tiff_triplet_tf(path_a, path_b, path_c, label):
+    img = tf.py_function(
+        func=load_tiff_triplet_py,
+        inp=[path_a, path_b, path_c],
+        Tout=tf.float32,
+    )
     img.set_shape([None, None, None])
     return img, label
 
@@ -418,7 +472,13 @@ def make_tf_dataset(samples,
                     num_channels=None,
                     shuffle=False
                     ):
-    if len(samples[0]) == 3:
+    if len(samples[0]) == 4:
+        paths_a, paths_b, paths_c, labels = zip(*samples)
+        ds = tf.data.Dataset.from_tensor_slices(
+            (list(paths_a), list(paths_b), list(paths_c), list(labels))
+        )
+        ds = ds.map(load_tiff_triplet_tf, num_parallel_calls=tf.data.AUTOTUNE)
+    elif len(samples[0]) == 3:
         paths_a, paths_b, labels = zip(*samples)
         ds = tf.data.Dataset.from_tensor_slices(
             (list(paths_a), list(paths_b), list(labels))
@@ -506,10 +566,16 @@ def build_stratified_benchmark(data_dir,
                                train_ratio=0.7,
                                val_ratio=0.15,
                                data_dir2=None,
+                               data_dir3=None,
                                images_extension=".tif",
                                seed=42
                                ):
-    if data_dir2:
+    if data_dir3:
+        file_paths_a, file_paths_b, file_paths_c, labels, class_names = collect_triplet_files(
+            data_dir, data_dir2, data_dir3, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, file_paths_c, labels))
+    elif data_dir2:
         file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
             data_dir, data_dir2, images_extension=images_extension
         )
@@ -553,10 +619,16 @@ def build_stratified_kfold_benchmark(data_dir,
                                      img_size=None,
                                      num_channels=None,
                                      data_dir2=None,
+                                     data_dir3=None,
                                      images_extension=".tif",
                                      seed=42
                                      ):
-    if data_dir2:
+    if data_dir3:
+        file_paths_a, file_paths_b, file_paths_c, labels, class_names = collect_triplet_files(
+            data_dir, data_dir2, data_dir3, images_extension=images_extension
+        )
+        samples = list(zip(file_paths_a, file_paths_b, file_paths_c, labels))
+    elif data_dir2:
         file_paths_a, file_paths_b, labels, class_names = collect_paired_files(
             data_dir, data_dir2, images_extension=images_extension
         )
