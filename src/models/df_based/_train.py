@@ -1,5 +1,6 @@
 # imports
 import os
+import sys
 import joblib
 import numpy as np
 import pandas as pd
@@ -12,6 +13,11 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import ComplementNB
 from xgboost import XGBClassifier
 from sklearn.svm import SVC
+try:
+    from tabicl import TabICLClassifier
+except ImportError as exc:  # Keep classical tabular models usable without TabICL.
+    TabICLClassifier = None
+    _TABICL_IMPORT_ERROR = exc
 from sklearn.metrics import make_scorer, accuracy_score, f1_score, roc_auc_score
 from sklearn.model_selection import (GridSearchCV,
                                      RandomizedSearchCV,
@@ -20,6 +26,17 @@ from sklearn.model_selection import (GridSearchCV,
                                      )
 from sklearn.feature_selection import (mutual_info_classif,
                                        SelectKBest)
+
+
+def _require_tabicl():
+    """Return TabICL or explain why it cannot be imported in this interpreter."""
+    if TabICLClassifier is None:
+        raise ImportError(
+            "TabICL could not be imported by "
+            f"{sys.executable!r}. Install it in this exact environment with "
+            f"{sys.executable} -m pip install tabicl."
+        ) from _TABICL_IMPORT_ERROR
+    return TabICLClassifier
 
 #################################################################
 DEFAULT_CV_SCORING = {"recall": "recall_weighted",
@@ -99,6 +116,15 @@ def build_param_grid(model: str) -> dict | None:
             **selector_k,
         }
 
+    elif model == "tabicl":
+
+        return {
+            "classifier__n_estimators": [4, 8],
+            "classifier__softmax_temperature": [0.9],
+            "classifier__batch_size": [8],
+            **selector_k,
+        }
+
     else:
         return None
 
@@ -149,8 +175,17 @@ def build_model(model: str = "dt",
                               max_iter=1000),
                    "xgb": XGBClassifier(random_state=random_state,
                                         eval_metric="logloss",
-                                        use_label_encoder=False)
+                                        use_label_encoder=False),
                    }
+
+    if model == "tabicl":
+        classifiers["tabicl"] = _require_tabicl()(random_state=random_state)
+
+    if model not in classifiers:
+        raise ValueError(
+            f"Unknown tabular model '{model}'. Choose from: "
+            f"{', '.join(sorted(classifiers))}."
+        )
 
     scaler = StandardScaler()
 
@@ -159,7 +194,7 @@ def build_model(model: str = "dt",
                      ("classifier", classifiers[model]),
                      ])
 
-    if model in ("xgb", "rf", "dt"):
+    if model in ("xgb", "rf", "dt", ):
         search = RandomizedSearchCV(estimator=pipe,
                                     param_distributions=param_grid,
                                     n_iter=50,
@@ -170,14 +205,16 @@ def build_model(model: str = "dt",
                                     random_state=random_state,
                                     n_jobs=-1
                                     )
-    else:  # knn, nb
+    else:  # knn, svc, tabicl
         search = GridSearchCV(estimator=pipe,
                               param_grid=param_grid,
                               scoring=scoring,
                               cv=cv_inner,
                               refit=True,
                               verbose=verbose,
-                              n_jobs=-1
+                              # TabICL uses a pretrained foundation model;
+                              # avoid multiplying model instances in parallel.
+                              n_jobs=1 if model == "tabicl" else -1
                               )
 
     return search
@@ -196,6 +233,7 @@ def run_cross_validation(model,
                          n_repeats: int = 3,
                          random_state: int = 42,
                          scoring: dict | None = None,
+                         n_jobs: int = -1,
                          ) -> pd.DataFrame:
     """
     Evaluate model with RepeatedStratifiedKFold and return a tidy DataFrame
@@ -215,7 +253,7 @@ def run_cross_validation(model,
                                 cv=cv,
                                 scoring=scoring or DEFAULT_CV_SCORING,
                                 return_train_score=True,
-                                n_jobs=-1
+                                n_jobs=n_jobs
                                 )
 
     scores_df = pd.DataFrame(cv_results)

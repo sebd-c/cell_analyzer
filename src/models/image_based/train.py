@@ -1,9 +1,13 @@
 # imports
 import argparse
+import csv
 import math
 import os
 import tensorflow as tf
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications import EfficientNetB0
 from tensorflow.keras.applications.resnet50 import preprocess_input
@@ -13,6 +17,7 @@ from tensorflow.keras.layers import (Dense, GlobalAveragePooling2D, LayerNormali
                                      Embedding, Add)
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.regularizers import l2
 
 from src.models.image_based.dataloader.dataset_api import (
     build_stratified_kfold_benchmark,
@@ -37,7 +42,10 @@ def build_model(img_size, num_channels, num_classes, lr):
 
     x = base_model.output
     x = GlobalAveragePooling2D()(x)
-    outputs = Dense(num_classes, activation="softmax")(x)
+    x = Dropout(0.4)(x)
+    outputs = Dense(num_classes,
+                    activation="softmax",
+                    kernel_regularizer=l2(1e-4))(x)
 
     model = Model(inputs=base_model.input, outputs=outputs)
     model.backbone = base_model
@@ -71,7 +79,10 @@ def build_convnext_model(img_size, num_channels, num_classes, lr):
     base_model.trainable = False
 
     x = GlobalAveragePooling2D()(base_model.output)
-    outputs = Dense(num_classes, activation="softmax")(x)
+    x = Dropout(0.4)(x)
+    outputs = Dense(num_classes,
+                    activation="softmax",
+                    kernel_regularizer=l2(1e-4))(x)
     model = Model(inputs=base_model.input, outputs=outputs)
     model.backbone = base_model
     model.compile(optimizer=Adam(learning_rate=lr),
@@ -144,7 +155,10 @@ def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
     x = LayerNormalization(epsilon=1e-6, name="encoder_norm")(x)
     x = GlobalAveragePooling1D(name="token_pooling")(x)
     x = Dropout(0.2, name="classifier_dropout")(x)
-    outputs = Dense(num_classes, activation="softmax", name="classifier")(x)
+    outputs = Dense(num_classes,
+                    activation="softmax",
+                    kernel_regularizer=l2(1e-4),
+                    name="classifier")(x)
     model = Model(inputs=inputs, outputs=outputs, name="vision_transformer")
     model.backbone = backbone
     model.compile(optimizer=Adam(learning_rate=lr),
@@ -169,7 +183,9 @@ def build_custom_cnn(img_size, num_channels, num_classes, lr):
     x = GlobalAveragePooling2D()(x)
     x = Dropout(0.4)(x)
 
-    outputs = Dense(num_classes, activation="softmax")(x)
+    outputs = Dense(num_classes,
+                    activation="softmax",
+                    kernel_regularizer=l2(1e-4))(x)
     model = Model(inputs=inputs, outputs=outputs)
     model.backbone = backbone
     model.compile(optimizer=Adam(learning_rate=lr),
@@ -276,6 +292,88 @@ def _evaluate_dataset(model, dataset, num_classes):
 
     bal_metrics = _compute_balanced_metrics(y_true, y_pred, num_classes)
     return bal_metrics, cm
+
+
+def _save_evaluation_csv(out_dir, model_name, fold, evaluations, class_names):
+    """Save scalar evaluation metrics in a tidy CSV file."""
+    output_path = os.path.join(
+        out_dir,
+        f"{model_name}_fold{fold}_evaluation.csv",
+    )
+
+    with open(output_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(
+            csv_file,
+            fieldnames=[
+                "split",
+                "record_type",
+                "metric",
+                "true_class",
+                "predicted_class",
+                "value",
+            ],
+        )
+        writer.writeheader()
+
+        metric_names = (
+            "balanced_accuracy",
+            "balanced_precision",
+            "balanced_f1",
+        )
+        for split, (metrics, _) in evaluations.items():
+            for metric_name, value in zip(metric_names, metrics):
+                writer.writerow({
+                    "split": split,
+                    "record_type": "metric",
+                    "metric": metric_name,
+                    "true_class": "",
+                    "predicted_class": "",
+                    "value": float(value),
+                })
+
+    print(f"Saved evaluation CSV: {output_path}")
+    return output_path
+
+
+def _save_confusion_matrix_plots(out_dir, model_name, fold, evaluations, class_names):
+    """Save one annotated raw-count confusion-matrix image per split."""
+    for split, (_, confusion_matrix) in evaluations.items():
+        figure_size = max(6, len(class_names) * 1.2)
+        fig, ax = plt.subplots(figsize=(figure_size, figure_size))
+        image = ax.imshow(confusion_matrix, interpolation="nearest", cmap="Blues")
+        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+
+        ax.set(
+            xticks=np.arange(len(class_names)),
+            yticks=np.arange(len(class_names)),
+            xticklabels=class_names,
+            yticklabels=class_names,
+            xlabel="Predicted class",
+            ylabel="True class",
+            title=f"{model_name} fold {fold} - {split} confusion matrix",
+        )
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+        threshold = confusion_matrix.max() / 2.0 if confusion_matrix.size else 0
+        for row in range(confusion_matrix.shape[0]):
+            for column in range(confusion_matrix.shape[1]):
+                ax.text(
+                    column,
+                    row,
+                    int(confusion_matrix[row, column]),
+                    ha="center",
+                    va="center",
+                    color="white" if confusion_matrix[row, column] > threshold else "black",
+                )
+
+        fig.tight_layout()
+        output_path = os.path.join(
+            out_dir,
+            f"{model_name}_fold{fold}_{split}_confusion_matrix.png",
+        )
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved confusion matrix image: {output_path}")
 
 
 def _compute_class_weights(samples, num_classes):
@@ -479,6 +577,10 @@ def main(args):
 
     train_metrics, train_cm = _evaluate_dataset(model, train_ds, num_classes)
     val_metrics, val_cm = _evaluate_dataset(model, val_ds, num_classes)
+    evaluations = {
+        "train": (train_metrics, train_cm),
+        "validation": (val_metrics, val_cm),
+    }
     bal_acc, bal_prec, bal_f1 = val_metrics
     print("Validation report:")
     print(f"  Balanced accuracy: {bal_acc:.4f}")
@@ -493,6 +595,7 @@ def main(args):
         test_metrics, test_cm = _evaluate_dataset(
             model, test_ds, num_classes
         )
+        evaluations["test"] = (test_metrics, test_cm)
         test_bal_acc, test_bal_prec, test_bal_f1 = test_metrics
         print("Test report:")
         print(f"  Balanced accuracy: {test_bal_acc:.4f}")
@@ -500,6 +603,21 @@ def main(args):
         print(f"  Balanced f1-score: {test_bal_f1:.4f}")
         print("Test confusion matrix:")
         print(test_cm)
+
+    _save_evaluation_csv(
+        args.out_dir,
+        args.model,
+        args.fold,
+        evaluations,
+        class_names,
+    )
+    _save_confusion_matrix_plots(
+        args.out_dir,
+        args.model,
+        args.fold,
+        evaluations,
+        class_names,
+    )
 
     print(f"Finished training fold {args.fold}")
 
@@ -551,13 +669,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--finetune_lr",
         type=float,
-        default=1e-5,
+        default=1e-6,
         help="Learning rate used after unfreezing the pretrained backbone tail.",
     )
     parser.add_argument(
         "--unfreeze_fraction",
         type=float,
-        default=0.25,
+        default=0.05,
         help="Fraction of pretrained backbone layers to unfreeze.",
     )
 

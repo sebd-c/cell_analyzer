@@ -23,8 +23,8 @@ import dalex as dx
 
 #################################################################################
 # global vars of relative paths
-INPUT_PATH = '/home/debs/Documents/work/data/u87/duplo_marcada/HetSenCellDB/whole_image/morphometric_tabular_data/labeled/cleaned_morpho_df2.csv'
-OUTPUT_DIR = '/home/debs/Documents/work/data/u87/duplo_marcada/HetSenCellDB/whole_image/morphometric_tabular_data/labeled/outputs_cleaned2'
+INPUT_PATH = '/home/debs/data/hetsencelldb/csv_tables/cleaned_morphometry_labeled.csv'
+OUTPUT_DIR = '/home/debs/data/hetsencelldb/tab_model_outputs'
 
 #################################################################################
 def run_pipeline(X_train,
@@ -40,6 +40,7 @@ def run_pipeline(X_train,
                  cv_scoring: dict | None = None,
                  n_splits: int = 5,
                  n_repeats: int = 3,
+                 cv_n_jobs: int = -1,
                  # output paths
                  output_dir: str = OUTPUT_DIR,
                  model_prefix: str = "decision_tree",
@@ -68,6 +69,7 @@ def run_pipeline(X_train,
                                      n_repeats= n_repeats,
                                      random_state= random_state,
                                      scoring= cv_scoring,
+                                     n_jobs= cv_n_jobs,
                                      )
     # save it as .csv
     metrics_filename = model_prefix + "_cv_metrics.csv"
@@ -215,86 +217,104 @@ if __name__ == "__main__":
     param_grid_svc = build_param_grid(model= "svc")
     # param_grid_nb = build_param_grid(model= "naive_bayes")
     param_grid_xgb = build_param_grid(model= "xgboost")
+    param_grid_tabicl = build_param_grid(model="tabicl")
 
-    # plot heatmatp feats
-    plot_feature_summary_heatmap(df= X_train,
-                                 output_dir=OUTPUT_DIR,
-                                 file_format='png')
-    # training process
-    # decision tree
-    results_dt = run_pipeline(X_train=X_train,
-                              y_train=y_train,
-                              X_test=X_test,
-                              y_test=y_test,
-                              param_grid= param_grid_dt,
-                              model_name="dt",
-                              cv_inner= 5,
-                              n_splits=5,
-                              n_repeats=3,
-                              output_dir=OUTPUT_DIR,
-                              model_prefix="decision_tree",
-                              random_state = 42,
-                              )
+    # # plot heatmatp feats
+    # plot_feature_summary_heatmap(df= X_train,
+    #                              output_dir=OUTPUT_DIR,
+    #                              file_format='png')
+    # # training process
+    # # decision tree
+    # results_dt = run_pipeline(X_train=X_train,
+    #                           y_train=y_train,
+    #                           X_test=X_test,
+    #                           y_test=y_test,
+    #                           param_grid= param_grid_dt,
+    #                           model_name="dt",
+    #                           cv_inner= 5,
+    #                           n_splits=5,
+    #                           n_repeats=3,
+    #                           output_dir=OUTPUT_DIR,
+    #                           model_prefix="decision_tree",
+    #                           random_state = 42,
+    #                           )
+    #
+    # # random forest
+    # results_rf = run_pipeline(X_train=X_train,
+    #                           y_train=y_train,
+    #                           X_test=X_test,
+    #                           y_test=y_test,
+    #                           param_grid=param_grid_rf,
+    #                           model_name="rf",
+    #                           cv_inner=5,
+    #                           n_splits=5,
+    #                           n_repeats=3,
+    #                           output_dir=OUTPUT_DIR,
+    #                           model_prefix="random_forest",
+    #                           random_state=42,
+    #                           )
+    #
+    # # knn
+    # results_knn = run_pipeline(X_train=X_train,
+    #                            y_train=y_train,
+    #                            X_test=X_test,
+    #                            y_test=y_test,
+    #                            param_grid=param_grid_knn,
+    #                            model_name="knn",
+    #                            cv_inner=5,
+    #                            n_splits=5,
+    #                            n_repeats=3,
+    #                            output_dir=OUTPUT_DIR,
+    #                            model_prefix="knn",
+    #                            random_state=42,
+    #                            )
+    #
+    # # naive bayes
+    # results_svc = run_pipeline(X_train=X_train,
+    #                           y_train=y_train,
+    #                           X_test=X_test,
+    #                           y_test=y_test,
+    #                           param_grid=param_grid_svc,
+    #                           model_name="svc",
+    #                           cv_inner=5,
+    #                           n_splits=5,
+    #                           n_repeats=3,
+    #                           output_dir=OUTPUT_DIR,
+    #                           model_prefix="svc",
+    #                           random_state=42,
+    #                           )
+    #
+    # # xgboost
+    # results_xgb = run_pipeline(X_train=X_train,
+    #                            y_train=y_train,
+    #                            X_test=X_test,
+    #                            y_test=y_test,
+    #                            param_grid=param_grid_xgb,
+    #                            model_name="xgb",
+    #                            cv_inner=5,
+    #                            n_splits=5,
+    #                            n_repeats=3,
+    #                            output_dir=OUTPUT_DIR,
+    #                            model_prefix="xgboost",
+    #                            random_state=42,
+    #                            )
 
-    # random forest
-    results_rf = run_pipeline(X_train=X_train,
-                              y_train=y_train,
-                              X_test=X_test,
-                              y_test=y_test,
-                              param_grid=param_grid_rf,
-                              model_name="rf",
-                              cv_inner=5,
-                              n_splits=5,
-                              n_repeats=3,
-                              output_dir=OUTPUT_DIR,
-                              model_prefix="random_forest",
-                              random_state=42,
-                              )
-
-    # knn
-    results_knn = run_pipeline(X_train=X_train,
-                               y_train=y_train,
-                               X_test=X_test,
-                               y_test=y_test,
-                               param_grid=param_grid_knn,
-                               model_name="knn",
-                               cv_inner=5,
-                               n_splits=5,
-                               n_repeats=3,
-                               output_dir=OUTPUT_DIR,
-                               model_prefix="knn",
-                               random_state=42,
-                               )
-
-    # naive bayes
-    results_svc = run_pipeline(X_train=X_train,
-                              y_train=y_train,
-                              X_test=X_test,
-                              y_test=y_test,
-                              param_grid=param_grid_svc,
-                              model_name="svc",
-                              cv_inner=5,
-                              n_splits=5,
-                              n_repeats=3,
-                              output_dir=OUTPUT_DIR,
-                              model_prefix="svc",
-                              random_state=42,
-                              )
-
-    # xgboost
-    results_xgb = run_pipeline(X_train=X_train,
-                               y_train=y_train,
-                               X_test=X_test,
-                               y_test=y_test,
-                               param_grid=param_grid_xgb,
-                               model_name="xgb",
-                               cv_inner=5,
-                               n_splits=5,
-                               n_repeats=3,
-                               output_dir=OUTPUT_DIR,
-                               model_prefix="xgboost",
-                               random_state=42,
-                               )
+    # TabICL pretrained tabular foundation model
+    results_tabicl = run_pipeline(X_train=X_train,
+                                  y_train=y_train,
+                                  X_test=X_test,
+                                  y_test=y_test,
+                                  param_grid=param_grid_tabicl,
+                                  model_name="tabicl",
+                                  search_scoring="f1_macro",
+                                  cv_inner=5,
+                                  n_splits=5,
+                                  n_repeats=3,
+                                  cv_n_jobs=1,
+                                  output_dir=OUTPUT_DIR,
+                                  model_prefix="tabicl",
+                                  random_state=42,
+                                  )
 
     # Evaluate on held-out test set,
     # only after model tuning

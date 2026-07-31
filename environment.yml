@@ -58,5 +58,6 @@ dependencies:
       - shapely==2.1.2
       - six==1.17.0
       - tifffile==2025.5.10
+      - tabicl
       - tzdata==2026.2
 prefix: /home/debs/miniconda3/envs/cell_analyser
