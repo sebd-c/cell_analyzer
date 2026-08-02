@@ -39,9 +39,10 @@ def _require_tabicl():
     return TabICLClassifier
 
 #################################################################
-DEFAULT_CV_SCORING = {"recall": "recall_weighted",
-                      "precision": "precision_weighted",
-                      "accuracy": "accuracy",
+DEFAULT_CV_SCORING = {"balanced_accuracy": "balanced_accuracy",
+                      "recall_macro": "recall_macro",
+                      "precision_macro": "precision_macro",
+                      "f1_macro": "f1_macro",
                       }
 
 
@@ -156,7 +157,7 @@ def get_select_k_best_features(fitted_model,
 # First repetition of the cross-validation nest
 def build_model(model: str = "dt",
                 param_grid: dict | None = None,
-                scoring: str = "f1_weighted",
+                scoring: str = "f1_macro",
                 cv_inner: int = 5,
                 random_state: int = 42,
                 verbose: int = 3,

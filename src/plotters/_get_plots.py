@@ -31,11 +31,14 @@ def plot_cv_metrics(scores_df: pd.DataFrame,
     """
     Plot train and test cross-validation metrics as simple boxplots.
     """
-    train_cols = ["train_recall", "train_precision", "train_accuracy"]
-    test_cols = ["test_recall", "test_precision", "test_accuracy"]
-    metric_labels = ["Recall", "Precision", "Accuracy"]
+    train_cols = ["train_balanced_accuracy", "train_recall_macro",
+                  "train_precision_macro", "train_f1_macro"]
+    test_cols = ["test_balanced_accuracy", "test_recall_macro",
+                 "test_precision_macro", "test_f1_macro"]
+    metric_labels = ["Balanced\naccuracy", "Macro\nrecall",
+                     "Macro\nprecision", "Macro F1"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4), sharey=True)
 
     axes[0].boxplot(scores_df[train_cols], tick_labels=metric_labels, showmeans=True)
     axes[0].set_title("Train")
