@@ -110,19 +110,23 @@ def run_pipeline(X_train,
                               model_prefix=model_prefix,
                               )
 
-    print("\n══ Step 5 / 8 — permutation importance ══")
-    perm_imp_csv_filename = model_prefix + "permutation_importance.csv"
-    perm_imp_csv_output_path = os.path.join(output_dir, perm_imp_csv_filename)
-    perm_imp_png_filename = model_prefix + "permutation_importance.png"
-    perm_imp_png_output_path = os.path.join(output_dir, perm_imp_png_filename)
-    perm_df = run_permutation_importance(clf=fitted_model,
-                                         X_train=X_train,
-                                         y_train=y_train,
-                                         feature_names=X_train.columns.tolist(),
-                                         output_path=perm_imp_csv_output_path,
-                                         )
-    plot_permutation_importance(perm_df, output_path=perm_imp_png_output_path,
-                                model_prefix=model_prefix)
+    if model_name == "tabicl":
+        print("\n══ Step 5 / 8 — Skipping permutation importance for TabICL ══")
+    else:
+        print("\n══ Step 5 / 8 — permutation importance ══")
+        perm_imp_csv_filename = model_prefix + "permutation_importance.csv"
+        perm_imp_csv_output_path = os.path.join(output_dir, perm_imp_csv_filename)
+        perm_imp_png_filename = model_prefix + "permutation_importance.png"
+        perm_imp_png_output_path = os.path.join(output_dir, perm_imp_png_filename)
+        perm_df = run_permutation_importance(clf=fitted_model,
+                                             X_train=X_train,
+                                             y_train=y_train,
+                                             feature_names=X_train.columns.tolist(),
+                                             output_path=perm_imp_csv_output_path,
+                                             )
+        plot_permutation_importance(perm_df,
+                                    output_path=perm_imp_png_output_path,
+                                    model_prefix=model_prefix)
 
     print("\n══ Step x / 8 — plotting for test ══")
     # class names
