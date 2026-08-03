@@ -164,7 +164,8 @@ class _ViTAttention(tf.keras.layers.Layer):
         self.query = Dense(hidden_size, name="query")
         self.key = Dense(hidden_size, name="key")
         self.value = Dense(hidden_size, name="value")
-        self.output = Dense(hidden_size, name="out")
+        # `output` is a reserved read-only property on Keras layers.
+        self.output_projection = Dense(hidden_size, name="out")
         self.dropout = Dropout(dropout_rate)
 
     def call(self, inputs, training=False):
@@ -192,7 +193,7 @@ class _ViTAttention(tf.keras.layers.Layer):
             output,
             [batch_size, sequence_length, self.hidden_size],
         )
-        return self.output(output)
+        return self.output_projection(output)
 
 
 class _ViTEncoderBlock(tf.keras.layers.Layer):
@@ -322,7 +323,7 @@ def _set_attention_weights(attention, parameters, prefix):
 
     output_kernel = _vit_parameter(parameters, f"{prefix}/out/kernel")
     output_bias = _vit_parameter(parameters, f"{prefix}/out/bias")
-    attention.output.set_weights([
+    attention.output_projection.set_weights([
         output_kernel.reshape(attention.hidden_size, attention.hidden_size),
         output_bias,
     ])
