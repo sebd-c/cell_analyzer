@@ -372,7 +372,9 @@ def _load_vit_l16_weights(backbone, parameters):
             parameters,
             f"{prefix}/MultiHeadDotProductAttention_1",
         )
-        _set_layer_norm_weights(block.norm2, parameters, f"{prefix}/LayerNorm_1")
+        # Flax's module auto-naming reserves LayerNorm_1 for the attention
+        # submodule, so the second encoder-block norm is LayerNorm_2.
+        _set_layer_norm_weights(block.norm2, parameters, f"{prefix}/LayerNorm_2")
         block.mlp_dense_0.set_weights([
             _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_0/kernel"),
             _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_0/bias"),
