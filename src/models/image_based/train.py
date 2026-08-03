@@ -10,7 +10,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.applications import VGG16
 from tensorflow.keras.applications.resnet50 import preprocess_input
+from tensorflow.keras.applications.vgg16 import preprocess_input as vgg16_preprocess_input
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dropout, BatchNormalization
 from tensorflow.keras.layers import (Dense, GlobalAveragePooling2D, LayerNormalization,
                                      GlobalAveragePooling1D, MultiHeadAttention,
@@ -88,6 +90,37 @@ def build_convnext_model(img_size, num_channels, num_classes, lr):
     model.compile(optimizer=Adam(learning_rate=lr),
                   loss="sparse_categorical_crossentropy",
                   metrics=["accuracy"])
+    return model
+
+
+def build_vgg16_model(img_size, num_channels, num_classes, lr):
+    """Build an ImageNet-pretrained VGG16 transfer-learning classifier."""
+    if num_channels != 3:
+        raise ValueError("VGG16 requires three input channels.")
+
+    inputs = tf.keras.Input(shape=(*img_size, num_channels))
+    backbone = VGG16(
+        weights="imagenet",
+        include_top=False,
+        input_shape=(*img_size, num_channels),
+    )
+    backbone.trainable = False
+
+    x = backbone(inputs)
+    x = GlobalAveragePooling2D()(x)
+    x = Dropout(0.4)(x)
+    outputs = Dense(
+        num_classes,
+        activation="softmax",
+        kernel_regularizer=l2(1e-4),
+    )(x)
+    model = Model(inputs=inputs, outputs=outputs, name="vgg16_classifier")
+    model.backbone = backbone
+    model.compile(
+        optimizer=Adam(learning_rate=lr),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
     return model
 
 
@@ -651,7 +684,7 @@ def main(args):
             print("Warning: filename mismatches detected for the third channel root.")
 
     effective_channels = args.num_channels
-    imagenet_models = {"resnet50", "convnext", "custom", "vit"}
+    imagenet_models = {"resnet50", "convnext", "custom", "vgg16", "vit"}
     if args.model in imagenet_models and args.num_channels in (1, 2):
         print(f"Warning: {args.model} expects 3 channels; upconverting to 3 channels.")
         effective_channels = 3
@@ -710,6 +743,8 @@ def main(args):
             # released Google ViT checkpoint was trained with [-1, 1] inputs.
             if args.model == "resnet50":
                 x = preprocess_input(x * 255.0)
+            elif args.model == "vgg16":
+                x = vgg16_preprocess_input(x * 255.0)
             elif args.model == "vit":
                 x = x * 2.0 - 1.0
             else:
@@ -745,6 +780,11 @@ def main(args):
                                 num_heads=args.vit_num_heads,
                                 transformer_layers=args.vit_transformer_layers,
                                 mlp_dim=args.vit_mlp_dim)
+    elif args.model == "vgg16":
+        model = build_vgg16_model(img_size=(args.img_size, args.img_size),
+                                  num_channels=effective_channels,
+                                  num_classes=num_classes,
+                                  lr=args.lr)
     else:
         model = build_custom_cnn(img_size=(args.img_size, args.img_size),
                                  num_channels=effective_channels,
@@ -763,7 +803,9 @@ def main(args):
 
     # Train a new head first, then fine-tune the tail of pretrained
     # ImageNet backbones using a much smaller learning rate.
-    is_pretrained_backbone = args.model in {"resnet50", "convnext", "custom", "vit"}
+    is_pretrained_backbone = args.model in {
+        "resnet50", "convnext", "custom", "vgg16", "vit"
+    }
     warmup_epochs = min(args.warmup_epochs, args.epochs)
 
     if is_pretrained_backbone and warmup_epochs > 0:
@@ -869,7 +911,7 @@ if __name__ == "__main__":
     parser.add_argument("--img_size", type=int, default=224)
     parser.add_argument("--num_channels", type=int, default=3)
     parser.add_argument("--model", type=str, default="custom",
-                        choices=["custom", "resnet50", "convnext", "vit"])
+                        choices=["custom", "resnet50", "convnext", "vgg16", "vit"])
     parser.add_argument(
         "--vit_patch_size",
         type=int,
