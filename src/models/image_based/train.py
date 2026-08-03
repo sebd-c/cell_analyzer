@@ -130,6 +130,7 @@ VIT_PRETRAINED_CHECKPOINT = (
 )
 
 
+@tf.keras.utils.register_keras_serializable(package="cell_analyzer")
 class _ViTClassToken(tf.keras.layers.Layer):
     """Learned [CLS] token used by the original Google ViT implementation."""
 
@@ -152,7 +153,13 @@ class _ViTClassToken(tf.keras.layers.Layer):
             [tf.shape(inputs)[0], 1, self.hidden_size],
         )
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"hidden_size": self.hidden_size})
+        return config
 
+
+@tf.keras.utils.register_keras_serializable(package="cell_analyzer")
 class _ViTAttention(tf.keras.layers.Layer):
     """Multi-head self-attention with weight shapes matching Flax ViT."""
 
@@ -167,6 +174,7 @@ class _ViTAttention(tf.keras.layers.Layer):
         # `output` is a reserved read-only property on Keras layers.
         self.output_projection = Dense(hidden_size, name="out")
         self.dropout = Dropout(dropout_rate)
+        self.dropout_rate = dropout_rate
 
     def call(self, inputs, training=False):
         batch_size = tf.shape(inputs)[0]
@@ -195,7 +203,17 @@ class _ViTAttention(tf.keras.layers.Layer):
         )
         return self.output_projection(output)
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "hidden_size": self.hidden_size,
+            "num_heads": self.num_heads,
+            "dropout_rate": self.dropout_rate,
+        })
+        return config
 
+
+@tf.keras.utils.register_keras_serializable(package="cell_analyzer")
 class _ViTEncoderBlock(tf.keras.layers.Layer):
     """Pre-norm Transformer block used by the released ViT-L/16 checkpoint."""
 
@@ -215,6 +233,10 @@ class _ViTEncoderBlock(tf.keras.layers.Layer):
         self.mlp_dropout_0 = Dropout(dropout_rate)
         self.mlp_dense_1 = Dense(hidden_size, name="Dense_1")
         self.mlp_dropout_1 = Dropout(dropout_rate)
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.mlp_dim = mlp_dim
+        self.dropout_rate = dropout_rate
 
     def call(self, inputs, training=False):
         attention = self.attention(self.norm1(inputs), training=training)
@@ -225,19 +247,34 @@ class _ViTEncoderBlock(tf.keras.layers.Layer):
         mlp = self.mlp_dropout_1(mlp, training=training)
         return x + mlp
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "hidden_size": self.hidden_size,
+            "num_heads": self.num_heads,
+            "mlp_dim": self.mlp_dim,
+            "dropout_rate": self.dropout_rate,
+        })
+        return config
 
+
+@tf.keras.utils.register_keras_serializable(package="cell_analyzer")
 class _ViTL16Backbone(tf.keras.Model):
     """Keras implementation of Google's ViT-L/16 encoder."""
 
     def __init__(self, img_size, hidden_size=1024, num_heads=16,
                  transformer_layers=24, mlp_dim=4096, **kwargs):
-        super().__init__(name="vit_l16_backbone", **kwargs)
+        kwargs.setdefault("name", "vit_l16_backbone")
+        super().__init__(**kwargs)
         height, width = img_size
         if height % 16 or width % 16:
             raise ValueError("ViT-L/16 requires image dimensions divisible by 16.")
         self.height = height
         self.width = width
         self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.transformer_layers = transformer_layers
+        self.mlp_dim = mlp_dim
         self.patch_embedding = tf.keras.layers.Conv2D(
             hidden_size,
             kernel_size=16,
@@ -282,6 +319,17 @@ class _ViTL16Backbone(tf.keras.Model):
             tokens = block(tokens, training=training)
         tokens = self.encoder_norm(tokens)
         return tokens[:, 0]
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "img_size": (self.height, self.width),
+            "hidden_size": self.hidden_size,
+            "num_heads": self.num_heads,
+            "transformer_layers": self.transformer_layers,
+            "mlp_dim": self.mlp_dim,
+        })
+        return config
 
 
 def _load_vit_npz(uri):
