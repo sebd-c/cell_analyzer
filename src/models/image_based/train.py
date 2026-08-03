@@ -126,7 +126,7 @@ def build_vgg16_model(img_size, num_channels, num_classes, lr):
 
 VIT_PRETRAINED_CHECKPOINT = (
     "gs://vit_models/augreg/"
-    "L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0.npz"
+    "B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz"
 )
 
 
@@ -215,7 +215,7 @@ class _ViTAttention(tf.keras.layers.Layer):
 
 @tf.keras.utils.register_keras_serializable(package="cell_analyzer")
 class _ViTEncoderBlock(tf.keras.layers.Layer):
-    """Pre-norm Transformer block used by the released ViT-L/16 checkpoint."""
+    """Pre-norm Transformer block used by the released ViT-B/16 checkpoint."""
 
     def __init__(self, hidden_size, num_heads, mlp_dim, dropout_rate=0.1,
                  **kwargs):
@@ -259,16 +259,16 @@ class _ViTEncoderBlock(tf.keras.layers.Layer):
 
 
 @tf.keras.utils.register_keras_serializable(package="cell_analyzer")
-class _ViTL16Backbone(tf.keras.Model):
-    """Keras implementation of Google's ViT-L/16 encoder."""
+class _ViTB16Backbone(tf.keras.Model):
+    """Keras implementation of Google's ViT-B/16 encoder."""
 
-    def __init__(self, img_size, hidden_size=1024, num_heads=16,
-                 transformer_layers=24, mlp_dim=4096, **kwargs):
-        kwargs.setdefault("name", "vit_l16_backbone")
+    def __init__(self, img_size, hidden_size=768, num_heads=12,
+                 transformer_layers=12, mlp_dim=3072, **kwargs):
+        kwargs.setdefault("name", "vit_b16_backbone")
         super().__init__(**kwargs)
         height, width = img_size
         if height % 16 or width % 16:
-            raise ValueError("ViT-L/16 requires image dimensions divisible by 16.")
+            raise ValueError("ViT-B/16 requires image dimensions divisible by 16.")
         self.height = height
         self.width = width
         self.hidden_size = hidden_size
@@ -377,7 +377,7 @@ def _set_attention_weights(attention, parameters, prefix):
     ])
 
 
-def _load_vit_l16_weights(backbone, parameters):
+def _load_vit_b16_weights(backbone, parameters):
     embedding = _vit_parameter(parameters, "embedding/kernel")
     embedding_bias = _vit_parameter(parameters, "embedding/bias")
     backbone.patch_embedding.set_weights([embedding, embedding_bias])
@@ -440,23 +440,23 @@ def _load_vit_l16_weights(backbone, parameters):
 
 
 def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
-                    projection_dim=1024, num_heads=16, transformer_layers=24,
-                    mlp_dim=4096):
-    """Build ViT-L/16 and load Google's AugReg ImageNet-21k checkpoint."""
+                    projection_dim=768, num_heads=12, transformer_layers=12,
+                    mlp_dim=3072):
+    """Build ViT-B/16 and load Google's AugReg ImageNet-21k checkpoint."""
     height, width = img_size
     if num_channels != 3:
-        raise ValueError("Pretrained ViT-L/16 requires three input channels.")
-    expected = (16, 1024, 16, 24, 4096)
+        raise ValueError("Pretrained ViT-B/16 requires three input channels.")
+    expected = (16, 768, 12, 12, 3072)
     supplied = (patch_size, projection_dim, num_heads, transformer_layers, mlp_dim)
     if supplied != expected:
         raise ValueError(
-            "The selected checkpoint is fixed to ViT-L/16 architecture: "
-            "patch_size=16, projection_dim=1024, num_heads=16, "
-            "transformer_layers=24, mlp_dim=4096."
+            "The selected checkpoint is fixed to ViT-B/16 architecture: "
+            "patch_size=16, projection_dim=768, num_heads=12, "
+            "transformer_layers=12, mlp_dim=3072."
         )
 
     inputs = tf.keras.Input(shape=(height, width, num_channels))
-    backbone = _ViTL16Backbone(img_size=img_size)
+    backbone = _ViTB16Backbone(img_size=img_size)
     features = backbone(inputs)
     x = Dropout(0.2, name="classifier_dropout")(features)
     outputs = Dense(
@@ -467,7 +467,7 @@ def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
     )(x)
     model = Model(inputs=inputs, outputs=outputs, name="vision_transformer_l16")
     _ = model(tf.zeros((1, height, width, num_channels)))
-    _load_vit_l16_weights(backbone, _load_vit_npz(VIT_PRETRAINED_CHECKPOINT))
+    _load_vit_b16_weights(backbone, _load_vit_npz(VIT_PRETRAINED_CHECKPOINT))
     backbone.trainable = False
     model.backbone = backbone
     model.compile(optimizer=Adam(learning_rate=lr),
@@ -527,7 +527,12 @@ def _compute_balanced_metrics(y_true, y_pred, num_classes):
 
 
 def _unfreeze_backbone_tail(model, fraction, learning_rate):
-    """Unfreeze the tail of a pretrained backbone and recompile the model."""
+    """Unfreeze the tail of a pretrained backbone and recompile the model.
+
+    ViT stores its Transformer blocks in a tracked Python list. Using the
+    backbone's top-level ``layers`` list would otherwise turn the default 5%
+    into just the final LayerNorm, leaving every Transformer block frozen.
+    """
     backbone = getattr(model, "backbone", None)
     if backbone is None:
         return False
@@ -535,18 +540,30 @@ def _unfreeze_backbone_tail(model, fraction, learning_rate):
     if not 0.0 < fraction <= 1.0:
         raise ValueError("unfreeze_fraction must be greater than 0 and at most 1.")
 
-    backbone_layers = list(backbone.layers)
-    n_unfrozen = max(1, math.ceil(len(backbone_layers) * fraction))
-
     backbone.trainable = True
-    for layer in backbone_layers[:-n_unfrozen]:
-        layer.trainable = False
-    for layer in backbone_layers[-n_unfrozen:]:
-        # BatchNorm statistics are unreliable with small fine-tuning batches.
-        if isinstance(layer, BatchNormalization):
+
+    vit_blocks = getattr(backbone, "encoder_blocks", None)
+    if vit_blocks is not None:
+        # For ViT, define the fraction over Transformer blocks rather than
+        # over the backbone's top-level bookkeeping layers.
+        n_unfrozen = max(1, math.ceil(len(vit_blocks) * fraction))
+        for layer in backbone.layers:
             layer.trainable = False
-        else:
-            layer.trainable = True
+        for block in vit_blocks[-n_unfrozen:]:
+            block.trainable = True
+        backbone.encoder_norm.trainable = True
+    else:
+        backbone_layers = list(backbone.layers)
+        n_unfrozen = max(1, math.ceil(len(backbone_layers) * fraction))
+        for layer in backbone_layers[:-n_unfrozen]:
+            layer.trainable = False
+        for layer in backbone_layers[-n_unfrozen:]:
+            # BatchNorm statistics are unreliable with small fine-tuning
+            # batches.
+            if isinstance(layer, BatchNormalization):
+                layer.trainable = False
+            else:
+                layer.trainable = True
 
     model.compile(
         optimizer=Adam(learning_rate=learning_rate),
@@ -967,12 +984,12 @@ if __name__ == "__main__":
         "--vit_patch_size",
         type=int,
         default=16,
-        help="ViT patch size; the selected ViT-L/16 checkpoint requires 16.",
+        help="ViT patch size; the selected ViT-B/16 checkpoint requires 16.",
     )
-    parser.add_argument("--vit_projection_dim", type=int, default=1024)
-    parser.add_argument("--vit_num_heads", type=int, default=16)
-    parser.add_argument("--vit_transformer_layers", type=int, default=24)
-    parser.add_argument("--vit_mlp_dim", type=int, default=4096)
+    parser.add_argument("--vit_projection_dim", type=int, default=768)
+    parser.add_argument("--vit_num_heads", type=int, default=12)
+    parser.add_argument("--vit_transformer_layers", type=int, default=12)
+    parser.add_argument("--vit_mlp_dim", type=int, default=3072)
     parser.add_argument("--mode", type=str, default="split",
                         choices=["split", "kfold"])
     parser.add_argument("--class_weight", type=str, default="balanced",
