@@ -91,75 +91,300 @@ def build_convnext_model(img_size, num_channels, num_classes, lr):
     return model
 
 
-def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
-                    projection_dim=64, num_heads=4, transformer_layers=8,
-                    mlp_dim=128):
-    """Build a ViT head on top of an ImageNet-pretrained visual tokenizer.
+VIT_PRETRAINED_CHECKPOINT = (
+    "gs://vit_models/augreg/"
+    "L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0.npz"
+)
 
-    TensorFlow Keras does not provide ImageNet-pretrained ViT weights, so an
-    EfficientNetB0 supplies pretrained visual features while the transformer
-    encoder and classifier are trained for this task.
-    """
+
+class _ViTClassToken(tf.keras.layers.Layer):
+    """Learned [CLS] token used by the original Google ViT implementation."""
+
+    def __init__(self, hidden_size, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+
+    def build(self, input_shape):
+        self.token = self.add_weight(
+            name="cls",
+            shape=(1, 1, self.hidden_size),
+            initializer="zeros",
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs):
+        return tf.broadcast_to(
+            self.token,
+            [tf.shape(inputs)[0], 1, self.hidden_size],
+        )
+
+
+class _ViTAttention(tf.keras.layers.Layer):
+    """Multi-head self-attention with weight shapes matching Flax ViT."""
+
+    def __init__(self, hidden_size, num_heads, dropout_rate=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.head_size = hidden_size // num_heads
+        self.query = Dense(hidden_size, name="query")
+        self.key = Dense(hidden_size, name="key")
+        self.value = Dense(hidden_size, name="value")
+        self.output = Dense(hidden_size, name="out")
+        self.dropout = Dropout(dropout_rate)
+
+    def call(self, inputs, training=False):
+        batch_size = tf.shape(inputs)[0]
+        sequence_length = tf.shape(inputs)[1]
+
+        def split_heads(x):
+            x = tf.reshape(
+                x,
+                [batch_size, sequence_length, self.num_heads, self.head_size],
+            )
+            return tf.transpose(x, [0, 2, 1, 3])
+
+        query = split_heads(self.query(inputs))
+        key = split_heads(self.key(inputs))
+        value = split_heads(self.value(inputs))
+
+        attention = tf.matmul(query, key, transpose_b=True)
+        attention *= tf.math.rsqrt(tf.cast(self.head_size, tf.float32))
+        attention = tf.nn.softmax(attention, axis=-1)
+        attention = self.dropout(attention, training=training)
+        output = tf.matmul(attention, value)
+        output = tf.transpose(output, [0, 2, 1, 3])
+        output = tf.reshape(
+            output,
+            [batch_size, sequence_length, self.hidden_size],
+        )
+        return self.output(output)
+
+
+class _ViTEncoderBlock(tf.keras.layers.Layer):
+    """Pre-norm Transformer block used by the released ViT-L/16 checkpoint."""
+
+    def __init__(self, hidden_size, num_heads, mlp_dim, dropout_rate=0.1,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.norm1 = LayerNormalization(epsilon=1e-6, name="LayerNorm_0")
+        self.attention = _ViTAttention(
+            hidden_size,
+            num_heads,
+            dropout_rate=0.0,
+            name="MultiHeadDotProductAttention_1",
+        )
+        self.attention_dropout = Dropout(dropout_rate)
+        self.norm2 = LayerNormalization(epsilon=1e-6, name="LayerNorm_1")
+        self.mlp_dense_0 = Dense(mlp_dim, activation=tf.nn.gelu, name="Dense_0")
+        self.mlp_dropout_0 = Dropout(dropout_rate)
+        self.mlp_dense_1 = Dense(hidden_size, name="Dense_1")
+        self.mlp_dropout_1 = Dropout(dropout_rate)
+
+    def call(self, inputs, training=False):
+        attention = self.attention(self.norm1(inputs), training=training)
+        x = inputs + self.attention_dropout(attention, training=training)
+        mlp = self.mlp_dense_0(self.norm2(x))
+        mlp = self.mlp_dropout_0(mlp, training=training)
+        mlp = self.mlp_dense_1(mlp)
+        mlp = self.mlp_dropout_1(mlp, training=training)
+        return x + mlp
+
+
+class _ViTL16Backbone(tf.keras.Model):
+    """Keras implementation of Google's ViT-L/16 encoder."""
+
+    def __init__(self, img_size, hidden_size=1024, num_heads=16,
+                 transformer_layers=24, mlp_dim=4096, **kwargs):
+        super().__init__(name="vit_l16_backbone", **kwargs)
+        height, width = img_size
+        if height % 16 or width % 16:
+            raise ValueError("ViT-L/16 requires image dimensions divisible by 16.")
+        self.height = height
+        self.width = width
+        self.hidden_size = hidden_size
+        self.patch_embedding = tf.keras.layers.Conv2D(
+            hidden_size,
+            kernel_size=16,
+            strides=16,
+            padding="valid",
+            name="embedding",
+        )
+        self.class_token = _ViTClassToken(hidden_size, name="cls")
+        num_tokens = (height // 16) * (width // 16) + 1
+        self.position_embedding = self.add_weight(
+            name="pos_embedding",
+            shape=(1, num_tokens, hidden_size),
+            initializer="zeros",
+            trainable=True,
+        )
+        self.position_dropout = Dropout(0.1)
+        self.encoder_blocks = [
+            _ViTEncoderBlock(
+                hidden_size,
+                num_heads,
+                mlp_dim,
+                dropout_rate=0.1,
+                name=f"encoderblock_{index}",
+            )
+            for index in range(transformer_layers)
+        ]
+        self.encoder_norm = LayerNormalization(
+            epsilon=1e-6,
+            name="encoder_norm",
+        )
+
+    def call(self, inputs, training=False):
+        patches = self.patch_embedding(inputs)
+        tokens = tf.reshape(
+            patches,
+            [tf.shape(patches)[0], -1, self.hidden_size],
+        )
+        tokens = tf.concat([self.class_token(tokens), tokens], axis=1)
+        tokens = tokens + self.position_embedding
+        tokens = self.position_dropout(tokens, training=training)
+        for block in self.encoder_blocks:
+            tokens = block(tokens, training=training)
+        tokens = self.encoder_norm(tokens)
+        return tokens[:, 0]
+
+
+def _load_vit_npz(uri):
+    """Load a public Google Cloud ViT checkpoint without requiring JAX/Flax."""
+    try:
+        with tf.io.gfile.GFile(uri, "rb") as checkpoint_file:
+            with np.load(checkpoint_file, allow_pickle=False) as checkpoint:
+                return {key: checkpoint[key] for key in checkpoint.files}
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not read ViT checkpoint {uri!r}. The public GCS object must "
+            "be reachable from this environment."
+        ) from exc
+
+
+def _vit_parameter(parameters, key):
+    try:
+        return parameters[key]
+    except KeyError as exc:
+        raise KeyError(f"Missing parameter {key!r} in the ViT checkpoint.") from exc
+
+
+def _set_layer_norm_weights(layer, parameters, prefix):
+    layer.set_weights([
+        _vit_parameter(parameters, f"{prefix}/scale"),
+        _vit_parameter(parameters, f"{prefix}/bias"),
+    ])
+
+
+def _set_attention_weights(attention, parameters, prefix):
+    for dense, name in (
+        (attention.query, "query"),
+        (attention.key, "key"),
+        (attention.value, "value"),
+    ):
+        kernel = _vit_parameter(parameters, f"{prefix}/{name}/kernel")
+        bias = _vit_parameter(parameters, f"{prefix}/{name}/bias")
+        dense.set_weights([kernel.reshape(attention.hidden_size, -1), bias.reshape(-1)])
+
+    output_kernel = _vit_parameter(parameters, f"{prefix}/out/kernel")
+    output_bias = _vit_parameter(parameters, f"{prefix}/out/bias")
+    attention.output.set_weights([
+        output_kernel.reshape(attention.hidden_size, attention.hidden_size),
+        output_bias,
+    ])
+
+
+def _load_vit_l16_weights(backbone, parameters):
+    embedding = _vit_parameter(parameters, "embedding/kernel")
+    embedding_bias = _vit_parameter(parameters, "embedding/bias")
+    backbone.patch_embedding.set_weights([embedding, embedding_bias])
+
+    pretrained_cls = _vit_parameter(parameters, "cls")
+    backbone.class_token.token.assign(pretrained_cls)
+
+    pretrained_position = _vit_parameter(
+        parameters,
+        "Transformer/posembed_input/pos_embedding",
+    )
+    target_tokens = backbone.position_embedding.shape[1]
+    if pretrained_position.shape[1] != target_tokens:
+        class_position = pretrained_position[:, :1]
+        grid_position = pretrained_position[:, 1:]
+        old_grid_size = int(math.sqrt(grid_position.shape[1]))
+        new_grid_size = int(math.sqrt(target_tokens - 1))
+        if old_grid_size ** 2 != grid_position.shape[1]:
+            raise ValueError("ViT checkpoint positional embedding is not square.")
+        if new_grid_size ** 2 != target_tokens - 1:
+            raise ValueError("Target ViT image size produces a non-square patch grid.")
+        grid_position = grid_position.reshape(
+            1, old_grid_size, old_grid_size, backbone.hidden_size
+        )
+        grid_position = tf.image.resize(
+            grid_position,
+            [new_grid_size, new_grid_size],
+            method="bicubic",
+        ).numpy()
+        pretrained_position = np.concatenate([class_position, grid_position.reshape(
+            1, new_grid_size * new_grid_size, backbone.hidden_size
+        )], axis=1)
+    backbone.position_embedding.assign(pretrained_position)
+
+    for index, block in enumerate(backbone.encoder_blocks):
+        prefix = f"Transformer/encoderblock_{index}"
+        _set_layer_norm_weights(block.norm1, parameters, f"{prefix}/LayerNorm_0")
+        _set_attention_weights(
+            block.attention,
+            parameters,
+            f"{prefix}/MultiHeadDotProductAttention_1",
+        )
+        _set_layer_norm_weights(block.norm2, parameters, f"{prefix}/LayerNorm_1")
+        block.mlp_dense_0.set_weights([
+            _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_0/kernel"),
+            _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_0/bias"),
+        ])
+        block.mlp_dense_1.set_weights([
+            _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_1/kernel"),
+            _vit_parameter(parameters, f"{prefix}/MlpBlock_3/Dense_1/bias"),
+        ])
+
+    _set_layer_norm_weights(
+        backbone.encoder_norm,
+        parameters,
+        "Transformer/encoder_norm",
+    )
+
+
+def build_vit_model(img_size, num_channels, num_classes, lr, patch_size=16,
+                    projection_dim=1024, num_heads=16, transformer_layers=24,
+                    mlp_dim=4096):
+    """Build ViT-L/16 and load Google's AugReg ImageNet-21k checkpoint."""
     height, width = img_size
     if num_channels != 3:
-        raise ValueError("Pretrained ViT tokenizer requires three input channels.")
-    if num_heads <= 0:
-        raise ValueError("ViT num_heads must be a positive integer.")
-    if projection_dim % num_heads:
-        raise ValueError("ViT projection_dim must be divisible by num_heads.")
-    if transformer_layers <= 0:
-        raise ValueError("ViT transformer_layers must be a positive integer.")
-    if mlp_dim <= 0:
-        raise ValueError("ViT mlp_dim must be a positive integer.")
+        raise ValueError("Pretrained ViT-L/16 requires three input channels.")
+    expected = (16, 1024, 16, 24, 4096)
+    supplied = (patch_size, projection_dim, num_heads, transformer_layers, mlp_dim)
+    if supplied != expected:
+        raise ValueError(
+            "The selected checkpoint is fixed to ViT-L/16 architecture: "
+            "patch_size=16, projection_dim=1024, num_heads=16, "
+            "transformer_layers=24, mlp_dim=4096."
+        )
 
     inputs = tf.keras.Input(shape=(height, width, num_channels))
-    backbone = EfficientNetB0(
-        weights="imagenet",
-        include_top=False,
-        input_shape=(height, width, num_channels),
-    )
+    backbone = _ViTL16Backbone(img_size=img_size)
+    features = backbone(inputs)
+    x = Dropout(0.2, name="classifier_dropout")(features)
+    outputs = Dense(
+        num_classes,
+        activation="softmax",
+        kernel_regularizer=l2(1e-4),
+        name="classifier",
+    )(x)
+    model = Model(inputs=inputs, outputs=outputs, name="vision_transformer_l16")
+    _ = model(tf.zeros((1, height, width, num_channels)))
+    _load_vit_l16_weights(backbone, _load_vit_npz(VIT_PRETRAINED_CHECKPOINT))
     backbone.trainable = False
-    feature_map = backbone(inputs)
-    feature_map = Conv2D(projection_dim, kernel_size=1, padding="same")(feature_map)
-    feature_height = feature_map.shape[1]
-    feature_width = feature_map.shape[2]
-    if feature_height is None or feature_width is None:
-        raise ValueError("ViT tokenizer produced an undefined spatial feature shape.")
-    num_patches = int(feature_height * feature_width)
-    tokens = tf.keras.layers.Reshape((num_patches, projection_dim))(feature_map)
-
-    positions = tf.range(start=0, limit=num_patches, delta=1)
-    position_embedding = Embedding(input_dim=num_patches,
-                                   output_dim=projection_dim)(positions)
-    x = Add()([tokens, position_embedding])
-
-    for index in range(transformer_layers):
-        x1 = LayerNormalization(epsilon=1e-6,
-                                name=f"transformer_{index}_norm_1")(x)
-        attention = MultiHeadAttention(
-            num_heads=num_heads,
-            key_dim=projection_dim // num_heads,
-            dropout=0.1,
-            name=f"transformer_{index}_attention",
-        )(x1, x1)
-        x2 = Add(name=f"transformer_{index}_attention_residual")([x, attention])
-
-        x3 = LayerNormalization(epsilon=1e-6,
-                                name=f"transformer_{index}_norm_2")(x2)
-        x3 = Dense(mlp_dim, activation=tf.nn.gelu,
-                   name=f"transformer_{index}_mlp_1")(x3)
-        x3 = Dropout(0.1, name=f"transformer_{index}_mlp_dropout")(x3)
-        x3 = Dense(projection_dim, name=f"transformer_{index}_mlp_2")(x3)
-        x = Add(name=f"transformer_{index}_mlp_residual")([x2, x3])
-
-    x = LayerNormalization(epsilon=1e-6, name="encoder_norm")(x)
-    x = GlobalAveragePooling1D(name="token_pooling")(x)
-    x = Dropout(0.2, name="classifier_dropout")(x)
-    outputs = Dense(num_classes,
-                    activation="softmax",
-                    kernel_regularizer=l2(1e-4),
-                    name="classifier")(x)
-    model = Model(inputs=inputs, outputs=outputs, name="vision_transformer")
     model.backbone = backbone
     model.compile(optimizer=Adam(learning_rate=lr),
                   loss="sparse_categorical_crossentropy",
@@ -480,10 +705,13 @@ def main(args):
 
     if args.model in imagenet_models:
         def imagenet_preprocess(x, y):
-            # The dataset API emits float images in [0, 1]. The ImageNet
-            # backbones used here expect values expressed in [0, 255].
+            # The dataset API emits float images in [0, 1]. ResNet, ConvNeXt,
+            # and EfficientNet expect values expressed in [0, 255]. The
+            # released Google ViT checkpoint was trained with [-1, 1] inputs.
             if args.model == "resnet50":
                 x = preprocess_input(x * 255.0)
+            elif args.model == "vit":
+                x = x * 2.0 - 1.0
             else:
                 x = x * 255.0
             return x, y
@@ -646,12 +874,12 @@ if __name__ == "__main__":
         "--vit_patch_size",
         type=int,
         default=16,
-        help="Retained for CLI compatibility; pretrained tokenizer controls token size.",
+        help="ViT patch size; the selected ViT-L/16 checkpoint requires 16.",
     )
-    parser.add_argument("--vit_projection_dim", type=int, default=64)
-    parser.add_argument("--vit_num_heads", type=int, default=4)
-    parser.add_argument("--vit_transformer_layers", type=int, default=8)
-    parser.add_argument("--vit_mlp_dim", type=int, default=128)
+    parser.add_argument("--vit_projection_dim", type=int, default=1024)
+    parser.add_argument("--vit_num_heads", type=int, default=16)
+    parser.add_argument("--vit_transformer_layers", type=int, default=24)
+    parser.add_argument("--vit_mlp_dim", type=int, default=4096)
     parser.add_argument("--mode", type=str, default="split",
                         choices=["split", "kfold"])
     parser.add_argument("--class_weight", type=str, default="balanced",
