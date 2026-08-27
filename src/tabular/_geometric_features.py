@@ -147,7 +147,7 @@ def get_contour_ellipse_feats(contour: np.ndarray) -> tuple:
     aspect = major_axis / minor_axis
 
     # calculates the eccentricity
-    eccentricity = m.sqrt((major_axis ** 2) - (minor_axis ** 2)) / major_axis ** 2
+    eccentricity = m.sqrt((1 - (minor_axis ** 2)) / major_axis ** 2)
 
     return aspect, eccentricity
 
