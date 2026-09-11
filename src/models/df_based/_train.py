@@ -27,7 +27,7 @@ from sklearn.model_selection import (GridSearchCV,
 from sklearn.feature_selection import (mutual_info_classif,
                                        SelectKBest)
 
-
+#TODO: check codes
 def _require_tabicl():
     """Return TabICL or explain why it cannot be imported in this interpreter."""
     if TabICLClassifier is None:
@@ -39,7 +39,7 @@ def _require_tabicl():
     return TabICLClassifier
 
 #################################################################
-DEFAULT_CV_SCORING = {"balanced_accuracy": "balanced_accuracy",
+DEFAULT_CV_SCORING = {"accuracy": "accuracy",
                       "recall_macro": "recall_macro",
                       "precision_macro": "precision_macro",
                       "f1_macro": "f1_macro",
