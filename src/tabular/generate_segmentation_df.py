@@ -25,6 +25,8 @@ import tifffile
 from src._io import make_contour_label
 from src.tabular._texture_features import get_glcm_features
 from src.tabular._texture_features import run_lbp_metrics
+from src.tabular._texture_features import get_local_texture_features
+from src.tabular._texture_features import get_spot_features
 from src.imaging._img_subprocess import get_unique_ids
 from src._execution_formatting import enter_to_continue
 from src._execution_formatting import print_progress_message
@@ -90,6 +92,8 @@ def process_single_contour(single_contour_img: np.ndarray,
         list_intensity_dict = {}
         list_lbp_dict = {}
         list_glcm_dict = {}
+        list_local_dict = {}
+        list_spots_dict = {}
 
         # loop to get different dict channels
         for channel_key in channels_dict.keys():
@@ -102,7 +106,7 @@ def process_single_contour(single_contour_img: np.ndarray,
 
             # get lbp textural parameters
             lbp_dict = run_lbp_metrics(image=channels_dict[channel_key],
-                                       contour=contour[0],
+                                       mask=single_contour_img,
                                        prefix=str(channel_key)
                                        )
 
@@ -115,10 +119,28 @@ def process_single_contour(single_contour_img: np.ndarray,
                                           prefix=str(channel_key)
                                           )
 
+            # get local texture parameters
+            local_dict = get_local_texture_features(image=channels_dict[channel_key],
+                                                    mask=single_contour_img,
+                                                    radius=3,
+                                                    levels=32,
+                                                    prefix=str(channel_key)
+                                                    )
+
+            # get bright spots parameters
+            # brightfield channels look for dark spots, fluorescent for bright ones
+            spots_dict = get_spot_features(image=channels_dict[channel_key],
+                                           mask=single_contour_img,
+                                           prefix=str(channel_key),
+                                           invert=channel_key != 'grayscale'
+                                           )
+
             # update dicts
             list_intensity_dict.update(intensity_dict)
             list_lbp_dict.update(lbp_dict)
             list_glcm_dict.update(glcm_dict)
+            list_local_dict.update(local_dict)
+            list_spots_dict.update(spots_dict)
 
         # update single contour dict with
         # morpho dict and intensity and texture dicts
@@ -126,6 +148,8 @@ def process_single_contour(single_contour_img: np.ndarray,
         single_contour_dict.update(list_intensity_dict)
         single_contour_dict.update(list_lbp_dict)
         single_contour_dict.update(list_glcm_dict)
+        single_contour_dict.update(list_local_dict)
+        single_contour_dict.update(list_spots_dict)
 
         # assembling contour df, i.e, making a row
         single_contour_df = pd.DataFrame(single_contour_dict, index=[0])  # noqa
