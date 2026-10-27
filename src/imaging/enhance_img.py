@@ -17,7 +17,9 @@ from src._execution_formatting import print_execution_parameters
 def enhance_single_img(og_img_path: str,
                        output_path: str,
                        clip_limit: int,
-                       tile_size: int
+                       tile_size: int,
+                       lower_value: float,
+                       upper_value: float
                        ) -> None:
     """
     This function takes the path to a poor quality image,
@@ -25,21 +27,16 @@ def enhance_single_img(og_img_path: str,
     """
     img = cv.imread(og_img_path, cv.IMREAD_GRAYSCALE)
 
-    # apply Z-score normalization
-    mean = np.mean(img)
-    std = np.std(img)
+    # batch-wide contrast stretch to 0-255
+    rescaled_img = normalize_img(img, lower_value, upper_value)
 
-    # use a small epsilon to avoid division by zero
-    normalized_img = (img - mean) / (std + 1e-6)
-
-    # Scale back to 0-255
-    rescaled_img = (255.0 * (normalized_img - np.min(normalized_img)) /
-                    (np.max(normalized_img) - np.min(normalized_img) + 1e-6))
-
-    rescaled_img = rescaled_img.astype(np.uint8)
+    # saving only the stretched img if CLAHE was skipped (auto mode)
+    if clip_limit is None:
+        cv.imwrite(output_path, rescaled_img)
+        return
 
     # apply histogram equalization
-    clip_limit = int(clip_limit)
+    clip_limit = float(clip_limit)
     tile_size = int(tile_size)
     # create a CLAHE object
     clahe = cv.createCLAHE(clipLimit=clip_limit,
@@ -55,11 +52,229 @@ def enhance_single_img(og_img_path: str,
     return
 
 
+def get_batch_stretch_limits(input_folder: str,
+                             img_extension: str
+                             ) -> tuple:
+    """
+    Returns the (lower, upper) stretch limits extracted from the data:
+    the darkest and brightest real signal over ALL imgs in the folder,
+    so every img gets the same stretch and intensities stay comparable between imgs.
+    Each img is 3x3 median filtered before taking its min/max, so isolated
+    hot/dead pixels don't set the limits (only those few pixels get clipped).
+    """
+    # getting img files in respective input folder
+    img_files = get_files_in_folder(path_to_folder=input_folder,
+                                    extension=img_extension)
+
+    # starting limits outside the uint8 range
+    lower_value = 255
+    upper_value = 0
+
+    # looping through imgs, updating the batch-wide limits
+    for img_file in img_files:
+        img = cv.imread(join(input_folder, img_file), cv.IMREAD_GRAYSCALE)
+
+        # removing isolated hot/dead pixels, keeping real structures
+        filtered_img = cv.medianBlur(img, 3)
+
+        lower_value = min(lower_value, int(filtered_img.min()))
+        upper_value = max(upper_value, int(filtered_img.max()))
+
+    return lower_value, upper_value
+
+
+def normalize_img(img: np.ndarray,
+                  lower_value: float,
+                  upper_value: float
+                  ) -> np.ndarray:
+    """
+    Linear contrast stretch: maps lower_value/upper_value
+    to 0/255 (clipping outside), returning an uint8 img.
+    The limits come from the whole batch (get_batch_stretch_limits),
+    so the same stretch is applied to every img.
+    """
+    # scaling to 0-255, using a small epsilon to avoid division by zero
+    rescaled_img = 255.0 * (img.astype(float) - lower_value) / (upper_value - lower_value + 1e-6)
+
+    # clipping values outside the limits
+    rescaled_img = np.clip(rescaled_img, 0, 255)
+
+    # rounding (instead of truncating) so dim imgs aren't biased downwards
+    return np.round(rescaled_img).astype(np.uint8)
+
+
+def get_objects_and_background_masks(img: np.ndarray,
+                                     noise_factor: float = 4,
+                                     margin: int = 41
+                                     ) -> tuple:
+    """
+    Given an uint8 img with objects brighter than the background,
+    returns rough boolean objects and background masks.
+    Objects are pixels clearly above background noise (including dim parts),
+    background is everything farther than a margin from any object.
+    Only used to score contrast, not as a segmentation.
+    """
+    # blur to keep noise out of the threshold
+    blurred_img = cv.GaussianBlur(img, (0, 0), 3).astype(float)
+
+    # robust background level and noise (median / MAD)
+    background_level = np.median(blurred_img)
+    noise = 1.4826 * np.median(np.abs(blurred_img - background_level))
+
+    # objects: anything clearly above background noise
+    objects_mask = blurred_img > background_level + noise_factor * noise
+
+    # removing specks
+    objects_mask = cv.morphologyEx(objects_mask.astype(np.uint8),
+                                   cv.MORPH_OPEN,
+                                   np.ones((5, 5), np.uint8)) > 0
+
+    # background: away from objects, so faint object borders don't count as background
+    near_objects = cv.dilate(objects_mask.astype(np.uint8),
+                             np.ones((margin, margin), np.uint8)) > 0
+    background_mask = ~near_objects
+
+    return objects_mask, background_mask
+
+
+def get_cnr(img: np.ndarray,
+            objects_mask: np.ndarray,
+            background_mask: np.ndarray
+            ) -> float:
+    """
+    Returns the contrast-to-noise ratio between objects and background:
+    (objects median - background mean) / background std.
+    Median is used so the dim parts of objects (most of their pixels) drive the score.
+    Rises when objects separate from background,
+    falls when background noise gets amplified.
+    """
+    objects_px = img[objects_mask]
+    background_px = img[background_mask]
+
+    cnr = (np.median(objects_px) - np.mean(background_px)) / (np.std(background_px) + 1e-6)
+
+    return float(cnr)
+
+
+def estimate_tile_size(objects_masks: list,
+                       img_width: int
+                       ) -> int:
+    """
+    Estimates the CLAHE grid size (number of tiles per side)
+    so that each tile is ~4 object diameters wide,
+    based on the area-weighted median object size in the rough objects masks
+    (weighted so leftover specks don't dominate).
+    """
+    # gathering object areas from all masks
+    areas = []
+    for objects_mask in objects_masks:
+        _, _, stats, _ = cv.connectedComponentsWithStats(objects_mask.astype(np.uint8))
+        # skipping label 0 (background)
+        areas.extend(stats[1:, cv.CC_STAT_AREA])
+
+    # falling back to opencv's default if no objects were found
+    if len(areas) == 0:
+        return 8
+
+    # area-weighted median: size of the object a typical object pixel belongs to
+    sorted_areas = np.sort(areas)
+    cumulative_weight = np.cumsum(sorted_areas) / np.sum(sorted_areas)
+    weighted_median_area = sorted_areas[np.searchsorted(cumulative_weight, 0.5)]
+
+    # equivalent diameter of that object
+    median_diameter = 2 * np.sqrt(weighted_median_area / np.pi)
+
+    tile_size = round(img_width / (4 * median_diameter))
+
+    return int(np.clip(tile_size, 2, 64))
+
+
+def find_best_clahe_params(input_folder: str,
+                           img_extension: str,
+                           lower_value: float,
+                           upper_value: float,
+                           max_samples: int = 10
+                           ) -> tuple:
+    """
+    Finds a single (clip_limit, tile_size) pair for the whole folder,
+    maximizing the mean contrast-to-noise ratio over a sample of its imgs,
+    so that all imgs are enhanced consistently.
+    Returns (None, None) if no combination beats the plain stretch (no CLAHE).
+    """
+    # getting img files in respective input folder
+    img_files = get_files_in_folder(path_to_folder=input_folder,
+                                    extension=img_extension)
+
+    # evenly spaced sample of imgs to score on
+    sample_indices = np.linspace(0, len(img_files) - 1,
+                                 num=min(max_samples, len(img_files)),
+                                 dtype=int)
+    sample_files = [img_files[index] for index in np.unique(sample_indices)]
+
+    # reading and normalizing sample imgs, and getting their rough objects/background masks
+    normalized_imgs = []
+    objects_masks = []
+    background_masks = []
+    for img_file in sample_files:
+        img = cv.imread(join(input_folder, img_file), cv.IMREAD_GRAYSCALE)
+        normalized_img = normalize_img(img, lower_value, upper_value)
+        objects_mask, background_mask = get_objects_and_background_masks(normalized_img)
+        normalized_imgs.append(normalized_img)
+        objects_masks.append(objects_mask)
+        background_masks.append(background_mask)
+
+    # estimating tile size from object size, and searching around it
+    estimated_tile_size = estimate_tile_size(objects_masks=objects_masks,
+                                             img_width=normalized_imgs[0].shape[1])
+    tile_sizes = sorted({max(2, round(estimated_tile_size * factor))
+                         for factor in (0.5, 1, 1.5, 2)})
+    clip_limits = np.arange(1.0, 4.01, 0.5)
+
+    print(f'\nsearching CLAHE params on {len(sample_files)} imgs '
+          f'(estimated tile size: {estimated_tile_size})...')
+
+    # baseline score, without CLAHE
+    baseline_cnr = np.mean([get_cnr(normalized_img, objects_mask, background_mask)
+                            for normalized_img, objects_mask, background_mask
+                            in zip(normalized_imgs, objects_masks, background_masks)])
+
+    # scoring every combination by mean cnr over sample imgs
+    scores = []
+    for tile_size in tile_sizes:
+        for clip_limit in clip_limits:
+            clahe = cv.createCLAHE(clipLimit=float(clip_limit),
+                                   tileGridSize=(tile_size, tile_size))
+            cnrs = [get_cnr(clahe.apply(normalized_img), objects_mask, background_mask)
+                    for normalized_img, objects_mask, background_mask
+                    in zip(normalized_imgs, objects_masks, background_masks)]
+            scores.append((float(np.mean(cnrs)), float(clip_limit), tile_size))
+
+    # printing the best combinations
+    scores.sort(reverse=True)
+    print(f'mean CNR without CLAHE: {baseline_cnr:.3f}')
+    print('top params (mean CNR | clip limit | tile size):')
+    for score, clip_limit, tile_size in scores[:5]:
+        print(f'  {score:.3f} | {clip_limit} | {tile_size}')
+
+    best_score, best_clip_limit, best_tile_size = scores[0]
+
+    # skipping CLAHE if no combination beats the plain stretch
+    if best_score <= baseline_cnr:
+        print('no CLAHE params beat the baseline, skipping CLAHE')
+        return None, None
+
+    print(f'using clip limit {best_clip_limit} and tile size {best_tile_size}')
+
+    return best_clip_limit, best_tile_size
+
+
 def enhance_dir_imgs(input_folder: str,
                      output_folder: str,
                      img_extension: str,
                      clip_limit: int,
-                     tile_size: int
+                     tile_size: int,
+                     lower_value: float,
+                     upper_value: float
                      ) -> None:
     """
     This function takes an input folder containing all the
@@ -89,7 +304,9 @@ def enhance_dir_imgs(input_folder: str,
         enhance_single_img(og_img_path=img_input_path,
                            output_path=output_path,
                            clip_limit=clip_limit,
-                           tile_size=tile_size)
+                           tile_size=tile_size,
+                           lower_value=lower_value,
+                           upper_value=upper_value)
 
     # printing execution message
     print(f'output saved to {output_folder}')
@@ -141,6 +358,20 @@ def get_args_dict() -> dict:
                         default=8,
                         help='defines tile size to grid size in open CVs CLAHE')
 
+    # auto params flag
+    parser.add_argument('-a', '--auto',
+                        dest='auto',
+                        action='store_true',
+                        help='finds clip limit and tile size automatically '
+                             '(ignores -c and -t), by maximizing objects contrast-to-noise ratio')
+
+    # no clahe flag
+    parser.add_argument('-n', '--no-clahe',
+                        dest='no_clahe',
+                        action='store_true',
+                        help='only applies the batch-wide linear stretch (ignores -c, -t and -a). '
+                             'use it when intensities must stay comparable between imgs')
+
     # output folder param
     parser.add_argument('-o', '--output_folder',
                         dest='output_folder',
@@ -184,12 +415,35 @@ def main():
     # waiting for user input
     enter_to_continue()
 
+    # getting a single stretch for the whole batch, so intensities stay comparable
+    lower_value, upper_value = get_batch_stretch_limits(input_folder=input_folder,
+                                                        img_extension=images_extension)
+    print(f'\nbatch stretch: intensity {lower_value} -> 0, {upper_value} -> 255')
+
+    # finding params automatically, if requested
+    if args_dict['auto'] and not args_dict['no_clahe']:
+        clip_limit, tile_size = find_best_clahe_params(input_folder=input_folder,
+                                                       img_extension=images_extension,
+                                                       lower_value=lower_value,
+                                                       upper_value=upper_value)
+
+    # skipping CLAHE, if requested
+    if args_dict['no_clahe']:
+        clip_limit, tile_size = None, None
+
+    # CLAHE is local and non-linear, so it changes relative intensities between imgs
+    if clip_limit is not None:
+        print('WARNING: CLAHE will be applied, intensities will NOT be comparable between imgs '
+              '(use -n/--no-clahe for quantification)')
+
     # running function to preprocess images in a folder
     enhance_dir_imgs(input_folder=input_folder,
                      output_folder=output_folder,
                      img_extension=images_extension,
                      clip_limit=clip_limit,
-                     tile_size=tile_size)
+                     tile_size=tile_size,
+                     lower_value=lower_value,
+                     upper_value=upper_value)
 
 
 ######################################################################

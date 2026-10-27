@@ -9,7 +9,10 @@ print('initializing...')  # noqa
 ######################################################################
 # imports
 # variable bgr
-COLOR = (0, 255, 0)
+# COLOR = (180, 105, 255) # pink for nuclei
+# COLOR = (255, 0, 00) # blue for citoplasm
+COLOR = (255, 0, 0) # pink for nuclei
+# COLOR = (0, 255, 0) # blue for citoplasm
 # importing required libraries
 print('importing required libraries...')  # noqa
 import argparse as ap
@@ -36,6 +39,51 @@ from src._execution_formatting import print_execution_parameters
 
 print('all required libraries successfully imported.')  # noqa
 
+# a mask label split in disconnected pieces keeps only the pieces
+# at least this fraction of its largest piece (drops stray fragments,
+# keeps e.g. two similar nuclei annotated with the same label)
+MIN_FRAGMENT_FRACTION = 0.2
+
+# objects (pieces) smaller than this, in pixels, are dropped
+MIN_OBJECT_AREA = 300
+
+
+def remove_label_fragments(original_mask: np.ndarray,
+                           pieces_mask: np.ndarray,
+                           min_fragment_fraction: float = MIN_FRAGMENT_FRACTION,
+                           min_object_area: int = MIN_OBJECT_AREA
+                           ) -> np.ndarray:
+    """
+    Given the original mask and its relabeled version (each connected piece
+    of an original label as its own object), removes from the relabeled mask
+    the pieces smaller than min_fragment_fraction of the largest piece
+    of the same original label, and the pieces smaller than min_object_area.
+    """
+    # area of each piece
+    pieces_areas = np.bincount(pieces_mask.ravel())
+
+    # original label of each piece (all pixels of a piece share one original label)
+    foreground = pieces_mask > 0
+    piece_ids, first_pixel = np.unique(pieces_mask[foreground], return_index=True)
+    piece_original_labels = original_mask[foreground][first_pixel]
+
+    # largest piece area of each original label
+    largest_piece_area = {}
+    for piece_id, original_label in zip(piece_ids, piece_original_labels):
+        largest_piece_area[original_label] = max(largest_piece_area.get(original_label, 0),
+                                                 pieces_areas[piece_id])
+
+    # pieces to drop
+    dropped_ids = [piece_id
+                   for piece_id, original_label in zip(piece_ids, piece_original_labels)
+                   if pieces_areas[piece_id] < min_object_area
+                   or pieces_areas[piece_id] < min_fragment_fraction * largest_piece_area[original_label]]
+
+    cleaned_mask = pieces_mask.copy()
+    cleaned_mask[np.isin(pieces_mask, dropped_ids)] = 0
+
+    return cleaned_mask
+
 
 #####################################################################
 def process_single_contour(single_contour_img: np.ndarray,
@@ -45,7 +93,8 @@ def process_single_contour(single_contour_img: np.ndarray,
                            phase_rgb: np.ndarray,
                            phase_red: np.ndarray,
                            phase_green: np.ndarray,
-                           phase_blue: np.ndarray
+                           phase_blue: np.ndarray,
+                           overlay_img: np.ndarray
                            ) -> pd.DataFrame | None:
     """
     Given an array of a single contour
@@ -160,7 +209,7 @@ def process_single_contour(single_contour_img: np.ndarray,
                            centroid_y=single_contour_df['cy_coords'].iloc[0],
                            color=COLOR,
                            thickness=2,
-                           img_to_label=phase_rgb,
+                           img_to_label=overlay_img,
                            contour=contour[0],
                            )
 
@@ -197,11 +246,21 @@ def make_image_contours_df(mask_name: str,
     image = cv.imread(og_img_path,
                    -1)
 
+    # 3-channel copy of the grayscale img to draw colored outlines on
+    overlay_image = cv.cvtColor(image, cv.COLOR_GRAY2BGR)
+
     # reading mask
     mask = tifffile.imread(mask_path)
 
+    # keeping the original labels, to know which pieces belong to the same label
+    original_mask = mask.copy()
+
     # relabel img as to separate loose pixels
     mask = skimeas.label(mask)
+
+    # dropping stray fragments of labels and too small objects
+    mask = remove_label_fragments(original_mask=original_mask,
+                                  pieces_mask=mask)
 
     # # make it uint8 for morphological operations
     mask = mask.astype(np.uint8)
@@ -253,7 +312,8 @@ def make_image_contours_df(mask_name: str,
                                             phase_rgb=phase_image,
                                             phase_red=phase_red,
                                             phase_green=phase_green,
-                                            phase_blue=phase_blue
+                                            phase_blue=phase_blue,
+                                            overlay_img=overlay_image
                                             )
 
         # appending current df to dfs list
@@ -265,7 +325,7 @@ def make_image_contours_df(mask_name: str,
     # save image with labels
     overlays_output_path = join(overlays_output_folder, mask_name)
 
-    cv.imwrite(overlays_output_path, phase_image)
+    cv.imwrite(overlays_output_path, overlay_image)
 
     # returning contours df
     return concat_contours_df
@@ -310,11 +370,16 @@ def make_folder_contours_df(masks_input_folder: str,
                                index=file_index,
                                total=masks_files_num)
 
-        # getting respective og img
-        og_img_file = og_files[file_index - 1]
+        # skipping masks without a same-named og/phase img
+        if mask_file not in og_files or mask_file not in phase_files:
+            print(f'\nno matching og/phase image for {mask_file}, skipping')
+            continue
 
-        # getting respective phase img
-        phase_file = phase_files[file_index - 1]
+        # getting respective og img (linked by name)
+        og_img_file = mask_file
+
+        # getting respective phase img (linked by name)
+        phase_file = mask_file
 
         # getting current image mask input/output paths
         mask_input_path = join(masks_input_folder,
