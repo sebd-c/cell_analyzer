@@ -216,11 +216,13 @@ def plot_distributions(cytnuc_df: pd.DataFrame,
                        features: list,
                        group_column: str,
                        kde_folder: str,
+                       kde_density_folder: str,
                        violin_folder: str,
                        file_format: str
                        ) -> None:
     """
-    For every feature, saves a kde plot and a violin plot, split by group.
+    For every feature, saves a count kde plot (histogram + kde scaled to counts),
+    a density kde plot (scaled by group size) and a violin plot, split by group.
     """
     group_order = get_group_order(cytnuc_df, group_column)
 
@@ -236,8 +238,10 @@ def plot_distributions(cytnuc_df: pd.DataFrame,
         # creating category subfolders (morphological, intensity, <compartment>_<channel>_texture...)
         category = get_feature_category(feature)
         kde_category_folder = join(kde_folder, category)
+        kde_density_category_folder = join(kde_density_folder, category)
         violin_category_folder = join(violin_folder, category)
         os.makedirs(kde_category_folder, exist_ok=True)
+        os.makedirs(kde_density_category_folder, exist_ok=True)
         os.makedirs(violin_category_folder, exist_ok=True)
 
         # skewed positive features (e.g. areas) are plotted in log scale,
@@ -251,14 +255,34 @@ def plot_distributions(cytnuc_df: pd.DataFrame,
         if clip is not None and upper_bound is not None:
             clip = (0, upper_bound)
 
-        # kde plot (each group normalized on its own, so group sizes don't matter)
+        # count kde plot (histogram outline + kde line, both in absolute counts)
+        fig, ax = plt.subplots(figsize=(7, 5))
+        sns.histplot(data=plot_df,
+                     x=feature,
+                     hue=group_column,
+                     hue_order=group_order,
+                     palette=get_group_palette(group_order),
+                     stat='count',
+                     element='step',
+                     fill=False,
+                     kde=True,
+                     kde_kws={'clip': clip},
+                     common_norm=False,
+                     log_scale=log_scale,
+                     ax=ax)
+        ax.set_title(feature)
+        if log_scale:
+            ax.set_xlabel(f'{feature} (log)')
+        save_fig(fig, kde_category_folder, feature, file_format)
+
+        # density kde plot (normalized over all groups, so each curve's area is its group's share)
         fig, ax = plt.subplots(figsize=(7, 5))
         sns.kdeplot(data=plot_df,
                     x=feature,
                     hue=group_column,
                     hue_order=group_order,
                     palette=get_group_palette(group_order),
-                    common_norm=False,
+                    common_norm=True,
                     log_scale=log_scale,
                     clip=clip,
                     warn_singular=False,
@@ -266,7 +290,7 @@ def plot_distributions(cytnuc_df: pd.DataFrame,
         ax.set_title(feature)
         if log_scale:
             ax.set_xlabel(f'{feature} (log)')
-        save_fig(fig, kde_category_folder, feature, file_format)
+        save_fig(fig, kde_density_category_folder, feature, file_format)
 
         # violin plot, with each object as a dot
         fig, ax = plt.subplots(figsize=(7, 5))
@@ -628,7 +652,7 @@ def make_plots(input_df_path: str,
 
     # creating output folders
     folders = {name: join(output_folder, name)
-               for name in ('kde', 'violin', 'correlation', 'scatter', 'multinucleated')}
+               for name in ('kde', 'kde_density', 'violin', 'correlation', 'scatter', 'multinucleated')}
     for folder in folders.values():
         os.makedirs(folder, exist_ok=True)
 
@@ -643,6 +667,7 @@ def make_plots(input_df_path: str,
                        features=cyto_features + nuc_features,
                        group_column=group_column,
                        kde_folder=folders['kde'],
+                       kde_density_folder=folders['kde_density'],
                        violin_folder=folders['violin'],
                        file_format=file_format)
 

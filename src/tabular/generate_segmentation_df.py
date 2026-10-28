@@ -11,7 +11,8 @@ print('initializing...')  # noqa
 # variable bgr
 # COLOR = (180, 105, 255) # pink for nuclei
 # COLOR = (255, 0, 00) # blue for citoplasm
-COLOR = (255, 0, 0) # pink for nuclei
+#COLOR = (255, 0, 0) # pink for nuclei
+COLOR = (55, 200, 0) # green for nuclei
 # COLOR = (0, 255, 0) # blue for citoplasm
 # importing required libraries
 print('importing required libraries...')  # noqa
